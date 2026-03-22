@@ -364,14 +364,22 @@ const DEG = Math.PI/180;
 // We tilt around the X axis — ecliptic normal = (0, cos60, -sin60)
 const ECL_TILT = 60*DEG;
 const eclNormal = normalize([0, Math.cos(ECL_TILT), -Math.sin(ECL_TILT)]);
+// = [0, 0.5, -0.866]
 
-// Earth's rotation axis: 23.5° from ecliptic normal, tilted toward +X
-// (so celestial north is in galactic north hemisphere)
+// Earth's rotation axis: 23.5° from ecliptic normal, tilted toward +X.
+// Correct construction: start from ecliptic normal and rotate 23.5° toward +X.
+// We rotate eclNormal by AXIS_TILT around the Z axis (which tilts it toward +X):
+//   rotAxisN = eclNormal rotated 23.5° toward +X in the XY plane
+// eclNormal = (0, cos60, -sin60)
+// Rotating toward +X by 23.5°:
+//   x' = 0·cos(23.5°) - ... actually simplest: rotate the Y component toward X
+// In the YX plane: new_x = eclNy·sin(AXIS_TILT), new_y = eclNy·cos(AXIS_TILT)
+// Z component unchanged.
 const AXIS_TILT = 23.5*DEG;
 const rotAxisN = normalize([
-  Math.sin(AXIS_TILT),
-  Math.cos(AXIS_TILT) * Math.cos(ECL_TILT),
-  -Math.cos(AXIS_TILT) * Math.sin(ECL_TILT)
+  Math.cos(ECL_TILT) * Math.sin(AXIS_TILT),   // x: eclNy · sin(23.5°)
+  Math.cos(ECL_TILT) * Math.cos(AXIS_TILT),   // y: eclNy · cos(23.5°)
+ -Math.sin(ECL_TILT)                           // z: unchanged from ecliptic normal
 ]);
 const rotAxisS = scale3(rotAxisN, -1);
 
