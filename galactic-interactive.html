@@ -28,7 +28,7 @@
     user-select: none;
   }
 
-  /* star field  */
+  /* star field */
   body::before {
     content: '';
     position: fixed; inset: 0;
@@ -76,13 +76,6 @@
     text-transform: uppercase;
   }
 
-  .hint {
-    font-size: 0.6rem;
-    letter-spacing: 0.1em;
-    color: var(--label);
-    text-align: right;
-  }
-
   .version-display {
     font-size: 0.55rem;
     letter-spacing: 0.08em;
@@ -90,6 +83,13 @@
     text-align: right;
     margin-top: 4px;
     font-family: 'Space Mono', monospace;
+  }
+
+  .hint {
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    color: var(--label);
+    text-align: right;
   }
 
   /* Main layout */
@@ -244,7 +244,7 @@
       </div>
       <div class="leg-item">
         <div class="leg-swatch dashed" style="color: rgba(165,214,167,0.8);"></div>
-        Ecliptic plane
+        Ecliptic plane (Earth's orbit)
       </div>
       <div class="leg-item">
         <div class="leg-swatch" style="background: rgba(100,181,246,0.8);"></div>
@@ -323,12 +323,8 @@
 //    Minor — a few new features or major bug fixes
 //    Patch — minor bug fixes, smallest increment
 // ═══════════════════════════════════════════════════════════════
-
-const VERSION = "1.1.0";
-
-// Inject version into header display
+const VERSION = "1.2.0";
 document.getElementById('versionDisplay').textContent = `v${VERSION}`;
-
 // ═══════════════════════════════════════════════════════════════
 //  3D MATH
 // ═══════════════════════════════════════════════════════════════
@@ -348,10 +344,11 @@ function rotateX(v, a) {
   ];
 }
 function project(v, scale, ox, oy) {
+  // Simple perspective projection — depth adds slight foreshortening
   const fov = 900;
   const z = v[2] + fov;
   const s = fov / z * scale;
-  return [ ox + v[0]*s, oy - v[1]*s, v[2] ];
+  return [ ox + v[0]*s, oy - v[1]*s, v[2] ]; // -y so +Y is up
 }
 function normalize(v) {
   const l = Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
@@ -368,32 +365,55 @@ function cross3(a, b) {
   ];
 }
 
+// Apply current rotation to a vector
 function applyRot(v, rx, ry) {
   return rotateX(rotateY(v, ry), rx);
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  GEOMETRY DEFINITIONS
+//  GEOMETRY DEFINITIONS  (all in galactic coordinates)
+//  +Y = galactic north
+//  +X = anti-core direction
+//  +Z = toward viewer in default pose
 // ═══════════════════════════════════════════════════════════════
 
 const DEG = Math.PI/180;
 
+// Ecliptic tilted 60° to galactic plane
+// We tilt around the X axis — ecliptic normal = (0, cos60, -sin60)
 const ECL_TILT = 60*DEG;
 const eclNormal = normalize([0, Math.cos(ECL_TILT), -Math.sin(ECL_TILT)]);
+// = [0, 0.5, -0.866]
 
+// Earth's rotation axis: 23.5° from ecliptic normal, tilted toward +X.
+// Correct construction: start from ecliptic normal and rotate 23.5° toward +X.
+// We rotate eclNormal by AXIS_TILT around the Z axis (which tilts it toward +X):
+//   rotAxisN = eclNormal rotated 23.5° toward +X in the XY plane
+// eclNormal = (0, cos60, -sin60)
+// Rotating toward +X by 23.5°:
+//   x' = 0·cos(23.5°) - ... actually simplest: rotate the Y component toward X
+// In the YX plane: new_x = eclNy·sin(AXIS_TILT), new_y = eclNy·cos(AXIS_TILT)
+// Z component unchanged.
 const AXIS_TILT = 23.5*DEG;
 const rotAxisN = normalize([
-  Math.cos(ECL_TILT) * Math.sin(AXIS_TILT),
-  Math.cos(ECL_TILT) * Math.cos(AXIS_TILT),
- -Math.sin(ECL_TILT)
+  Math.cos(ECL_TILT) * Math.sin(AXIS_TILT),   // x: eclNy · sin(23.5°)
+  Math.cos(ECL_TILT) * Math.cos(AXIS_TILT),   // y: eclNy · cos(23.5°)
+ -Math.sin(ECL_TILT)                           // z: unchanged from ecliptic normal
 ]);
 const rotAxisS = scale3(rotAxisN, -1);
 
-const EARTH_POS = [0.58, 0, 0];
-const SUN_POS   = [0.58, 0, 0];
-const CORE_POS  = [0,    0, 0];
+// Earth/Sun position: ~58% from galactic centre toward anti-core (+X)
+// In normalised units where galactic disk radius = 1.0
+// We place Earth+Sun system at x=0.58 in the galactic plane.
+// The sun and Earth are essentially at the same location at galactic scale —
+// the orbit is tiny relative to the disk, but we render it large enough to see.
+const EARTH_POS = [0.58, 0, 0];  // normalised galactic coords
+const SUN_POS   = [0.58, 0, 0];  // sun coincides with Earth at galactic scale
+const CORE_POS  = [0,    0, 0];  // galactic centre
 
+// ── Galactic disk ──────────────────────────────────────────────
 function makeDisc(cx, cy, cz, rx, rz, n) {
+  // Ellipse in the XZ plane (galactic plane, y=0)
   const pts = [];
   for (let i = 0; i <= n; i++) {
     const a = (i/n)*Math.PI*2;
@@ -402,10 +422,13 @@ function makeDisc(cx, cy, cz, rx, rz, n) {
   return pts;
 }
 
+// ── Ecliptic plane ─────────────────────────────────────────────
+// A disc tilted by ECL_TILT around the X axis, centred on Earth
 function makeEclipticDisc(centre, r, n) {
   const pts = [];
   for (let i = 0; i <= n; i++) {
     const a = (i/n)*Math.PI*2;
+    // Point on circle in XZ plane, then tilt around X by ECL_TILT
     const x = r*Math.cos(a);
     const z = r*Math.sin(a);
     const y2 = -z*Math.sin(ECL_TILT);
@@ -415,7 +438,10 @@ function makeEclipticDisc(centre, r, n) {
   return pts;
 }
 
+// ── Celestial equator ──────────────────────────────────────────
+// Circle perpendicular to rotAxisN, centred on Earth
 function makeCelestialEquator(centre, r, n) {
+  // Two vectors perpendicular to rotAxisN
   const up = [0,1,0];
   let u = cross3(rotAxisN, up);
   if (dot3(u,u) < 0.001) u = cross3(rotAxisN, [1,0,0]);
@@ -433,51 +459,74 @@ function makeCelestialEquator(centre, r, n) {
   return pts;
 }
 
+// ── Earth orbit around sun ─────────────────────────────────────
+// Small ellipse in the ecliptic plane, centred on SUN_POS
 function makeOrbit(r, n) {
   return makeEclipticDisc(SUN_POS, r, n);
 }
 
+// ── Seasonal Earth positions & night-view arrows ───────────────
+// Seasons: Earth orbits sun. The orbit is in the ecliptic plane.
+// Season angle = position on ecliptic orbit.
+// Night-view = anti-sun direction + galactic-latitude bias.
+
 const SEASONS = [
   {
     name: 'Summer', color: '#f5a623',
-    orbitAngle: Math.PI,
-    galBias: [0, -1.2, 0],
+    // Summer: sun in Gemini/anti-core direction. Earth on core side (-X of sun).
+    // Night side faces away from sun = toward core (-X direction).
+    // Core sits low in galactic south at 42°N → strong -Y bias.
+    orbitAngle: Math.PI,       // Earth at -X side of sun
+    galBias: [0, -1.2, 0],     // strongly toward galactic south (-Y)
     quadrant: 'Down / In',
   },
   {
     name: 'Autumn', color: '#ce93d8',
-    orbitAngle: Math.PI*0.5,
-    galBias: [0, -1.5, 0],
+    // Autumn: Earth at +Z side of ecliptic after tilt → raw anti-sun has -Y component.
+    // Core still accessible but setting. Still Down/In — reinforce with strong -Y.
+    orbitAngle: Math.PI*0.5,   // Earth at +Z ecliptic → tilts to -Y after ECL_TILT
+    galBias: [0, -1.5, 0],     // strongly toward galactic south to overcome tilt
     quadrant: 'Down / In',
   },
   {
     name: 'Winter', color: '#64b5f6',
-    orbitAngle: 0,
-    galBias: [0, 1.2, 0],
+    // Winter: sun in Sagittarius/core direction. Earth on anti-core side (+X of sun).
+    // Night side faces away from sun = toward anti-core (+X).
+    // Anti-core rides high toward galactic north at 42°N → strong +Y bias.
+    orbitAngle: 0,             // Earth at +X side of sun
+    galBias: [0, 1.2, 0],      // strongly toward galactic north (+Y)
     quadrant: 'Up / Out',
   },
   {
     name: 'Spring', color: '#a5d6a7',
-    orbitAngle: Math.PI*1.5,
-    galBias: [0, 1.8, 0],
+    // Spring: Earth at -Z ecliptic → raw anti-sun has +Y component after tilt.
+    // Galactic north pole nearly overhead. Up/Out polar view → strong +Y.
+    orbitAngle: Math.PI*1.5,   // Earth at -Z ecliptic → tilts to +Y after ECL_TILT
+    galBias: [0, 1.8, 0],      // very strongly toward galactic north pole
     quadrant: 'Up / Out (polar)',
   },
 ];
 
+// Compute Earth position on orbit for a given angle
 function earthOnOrbit(angle, orbitR) {
+  // Orbit in ecliptic plane
   const x = orbitR * Math.cos(angle);
   const z_ecl = orbitR * Math.sin(angle);
+  // Tilt by ECL_TILT around X
   const y = -z_ecl * Math.sin(ECL_TILT);
   const z =  z_ecl * Math.cos(ECL_TILT);
   return [SUN_POS[0]+x, SUN_POS[1]+y, SUN_POS[2]+z];
 }
 
+// Compute night-view arrow for a season
 function nightViewArrow(earthPos, galBias, arrowLen) {
+  // Raw anti-sun direction
   const raw = normalize([
     earthPos[0]-SUN_POS[0],
     earthPos[1]-SUN_POS[1],
     earthPos[2]-SUN_POS[2]
   ]);
+  // Blend with galactic bias
   const blended = normalize(add3(raw, galBias));
   return add3(earthPos, scale3(blended, arrowLen));
 }
@@ -489,7 +538,7 @@ function nightViewArrow(earthPos, galBias, arrowLen) {
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
-let rotX = 0.38, rotY = -0.55;
+let rotX = 0.38, rotY = -0.55;  // initial view
 let zoom = 1.0;
 let dragging = false, lastX = 0, lastY = 0;
 let seasonVisible = [true, true, true, true];
@@ -520,6 +569,7 @@ function drawArrow(p3from, p3to, color, lineW, headSize) {
   ctx.lineWidth = lineW||2;
   ctx.setLineDash([]);
   ctx.stroke();
+  // Arrowhead
   const angle = Math.atan2(b[1]-a[1], b[0]-a[0]);
   const s = headSize||10;
   ctx.beginPath();
@@ -581,6 +631,7 @@ function label(p3, text, color, offx, offy, align, size) {
   ctx.textBaseline = 'alphabetic';
 }
 
+// Compute average Z depth of a polygon for painter's algorithm
 function polyDepth(pts3) {
   const rot = pts3.map(p => applyRot(p, rotX, rotY));
   return rot.reduce((s,p) => s+p[2], 0) / rot.length;
@@ -591,34 +642,43 @@ function render() {
   canvas.height = canvas.offsetHeight;
   ctx.clearRect(0, 0, W(), H());
 
+  // Fill dark background explicitly so iframe white doesn't show through
   ctx.fillStyle = '#03040c';
   ctx.fillRect(0, 0, W(), H());
 
   const SCALE = Math.min(W(), H()) * 0.38 * zoom;
+  // Override zoom into project by updating zoom variable used in proj()
 
-  const GAL_R  = 1.0;
-  const ECL_R  = 0.40;
-  const CEQ_R  = 0.20;
-  const ORBIT_R = 0.18;
-  const AXIS_L  = 0.55;
-  const ROT_L   = 0.28;
-  const ARROW_L = 0.55;
+  const GAL_R   = 1.15;  // galactic disk radius — larger (+15%)
+  const CEQ_R   = 0.17;  // celestial equator radius — smaller (-15%)
+  const ORBIT_R = 0.15;  // Earth orbit/ecliptic radius — smaller (-15%)
+  const AXIS_L  = 0.62;  // galactic N/S axis — scales with disk
+  const ROT_L   = 0.24;  // rotation axis half-length — slightly smaller
+  const ARROW_L = 0.52;  // seasonal view arrow length
 
+  // Scale all geometry
   const s = SCALE;
   function sv(v) { return scale3(v, s); }
+  function sp(p) { return scale3(p, s); }  // scale a position
 
+  // ── Build draw list with depth for painter's algorithm ────────
   const drawList = [];
+
+  // Helper to push an item
   function push(depth, fn) { drawList.push({depth, fn}); }
 
+  // ── Galactic plane ──────────────────────────────────────────
   const galPts = makeDisc(0,0,0, GAL_R, GAL_R, 72).map(p=>sv(p));
   push(polyDepth(galPts.slice(0,4)), () => {
     drawPoly(galPts, 'rgba(245,166,35,0.75)', 'rgba(245,166,35,0.07)', 1.5);
   });
 
+  // Galactic disk faint Z-orientation line
   push(0, () => {
     drawLine(sv([0,0,-GAL_R]), sv([0,0,GAL_R]), 'rgba(245,166,35,0.12)', 1, [6,6]);
   });
 
+  // Core glow — at galactic centre [0,0,0], distinct amber/orange
   push(0, () => {
     const cp = proj(sv(CORE_POS));
     const gr = ctx.createRadialGradient(cp[0],cp[1],0,cp[0],cp[1],s*0.14);
@@ -634,6 +694,7 @@ function render() {
     label(sv(CORE_POS), '(Sagittarius)', 'rgba(255,180,60,0.6)', 0, s*0.155, 'center', 8);
   });
 
+  // ── Galactic N/S axis ───────────────────────────────────────
   push(0, () => {
     drawLine(sv(CORE_POS), sv([0,AXIS_L,0]), 'rgba(100,181,246,0.6)', 1.5, [5,5]);
     drawLine(sv(CORE_POS), sv([0,-AXIS_L,0]),'rgba(239,154,154,0.6)', 1.5, [5,5]);
@@ -643,17 +704,22 @@ function render() {
     label(sv([0,-AXIS_L*1.08,0]), 'GAL. SOUTH', '#ef9a9a', 0, 0, 'center', 8);
   });
 
+  // Z-axis cross line (faint orientation guide only)
   push(0, () => {
     drawLine(sv([0,0,-GAL_R]), sv([0,0,GAL_R]), 'rgba(245,166,35,0.12)', 1, [6,6]);
   });
 
-  const eclPts = makeEclipticDisc(SUN_POS, ECL_R, 64).map(p=>sv(p));
-  push(polyDepth(eclPts.slice(0,4)), () => {
-    drawPoly(eclPts, 'rgba(165,214,167,0.7)', 'rgba(165,214,167,0.05)', 1.2, [4,4]);
-    const rimPt = eclPts[8];
+  // ── Earth orbit = ecliptic plane — centred on SUN_POS ─────────
+  // This ellipse IS the ecliptic — Earth's seasonal positions lie on it.
+  // The separate larger ecliptic disc has been removed as redundant.
+  const orbitPts = makeOrbit(ORBIT_R, 64).map(p=>sv(p));
+  push(polyDepth(orbitPts.slice(0,4)), () => {
+    drawPoly(orbitPts, 'rgba(165,214,167,0.7)', 'rgba(165,214,167,0.04)', 1.4, [3,4]);
+    const rimPt = orbitPts[10];
     label(rimPt, 'ECLIPTIC', 'rgba(165,214,167,0.75)', 0, -s*0.04, 'center', 8);
   });
 
+  // ── Celestial equator — centred on Earth/Sun ───────────────
   const eu = EARTH_POS;
   const ceqPts = makeCelestialEquator(eu, CEQ_R, 64).map(p=>sv(p));
   push(polyDepth(ceqPts.slice(0,4)), () => {
@@ -662,11 +728,7 @@ function render() {
     label(rimPt, 'CELESTIAL EQ.', 'rgba(100,181,246,0.75)', 0, -s*0.04, 'center', 8);
   });
 
-  const orbitPts = makeOrbit(ORBIT_R, 64).map(p=>sv(p));
-  push(polyDepth(orbitPts.slice(0,4)), () => {
-    drawPoly(orbitPts, 'rgba(165,214,167,0.4)', null, 1.2, [3,4]);
-  });
-
+  // ── Sun — at SUN_POS (offset from galactic core) ────────────
   push(0, () => {
     const sp2 = proj(sv(SUN_POS));
     const sg = ctx.createRadialGradient(sp2[0],sp2[1],0,sp2[0],sp2[1],s*0.055);
@@ -680,6 +742,7 @@ function render() {
     label(sv(SUN_POS), 'SUN', 'rgba(255,240,160,0.9)', 0, s*0.065, 'center', 9);
   });
 
+  // ── Rotation axis — centred on Earth ───────────────────────
   push(0, () => {
     drawLine(
       sv(add3(eu, scale3(rotAxisS, ROT_L))),
@@ -692,6 +755,7 @@ function render() {
       'N (cel.)', '#64b5f6', 0, 0, 'center', 8);
   });
 
+  // ── Earth ───────────────────────────────────────────────────
   push(0, () => {
     const ep = proj(sv(eu));
     const eg = ctx.createRadialGradient(ep[0],ep[1],0,ep[0],ep[1],s*0.055);
@@ -707,6 +771,7 @@ function render() {
     label(sv(eu), 'Orion Spur, ~26kly from core', 'rgba(255,255,255,0.35)', 0, -s*0.1, 'center', 7);
   });
 
+  // ── Seasonal view arrows ─────────────────────────────────────
   SEASONS.forEach((s2, i) => {
     if (!seasonVisible[i]) return;
     const ePos = earthOnOrbit(s2.orbitAngle, ORBIT_R);
@@ -714,15 +779,19 @@ function render() {
     const arrowTip = nightViewArrow(ePos, scale3(s2.galBias, 0.5), ARROW_L);
     const arrowTipS = sv(arrowTip);
 
+    // Earth position on orbit
     push(0, () => {
       dot(ePosS, s2.color, 5);
       drawArrow(ePosS, arrowTipS, s2.color, 2, 10);
       label(arrowTipS, s2.name, s2.color, 0, -s*0.05, 'center', 8);
       label(arrowTipS, s2.quadrant, 'rgba(255,255,255,0.45)', 0, s*0.03, 'center', 7);
+
+      // Small line from sun to Earth position (to show orbital connection)
       drawLine(sv(SUN_POS), ePosS, 'rgba(255,255,255,0.12)', 1, [2,4]);
     });
   });
 
+  // ── Sort by depth and draw ───────────────────────────────────
   drawList.sort((a,b) => a.depth - b.depth);
   drawList.forEach(item => item.fn());
 }
@@ -754,6 +823,7 @@ function onWheel(e) {
   render();
 }
 
+// Touch support
 let lastTouchDist = null;
 function onTouchStart(e) {
   if (e.touches.length === 1) {
@@ -801,6 +871,7 @@ canvas.addEventListener('touchstart', onTouchStart, {passive: false});
 canvas.addEventListener('touchmove', onTouchMove, {passive: false});
 canvas.addEventListener('touchend', onTouchEnd);
 
+// Season toggle buttons
 document.getElementById('toggles').querySelectorAll('.tog').forEach(btn => {
   btn.addEventListener('click', () => {
     const i = parseInt(btn.dataset.season);
@@ -811,14 +882,21 @@ document.getElementById('toggles').querySelectorAll('.tog').forEach(btn => {
   });
 });
 
+// Reset button
 document.getElementById('resetBtn').addEventListener('click', () => {
   rotX = DEFAULT_RX; rotY = DEFAULT_RY; zoom = 1.0;
   render();
 });
 
-const ro = new ResizeObserver(() => render());
+// Resize observer — debounced to avoid ResizeObserver loop notifications
+let resizeTimer = null;
+const ro = new ResizeObserver(() => {
+  if (resizeTimer) cancelAnimationFrame(resizeTimer);
+  resizeTimer = requestAnimationFrame(() => render());
+});
 ro.observe(canvas);
 
+// Initial render
 render();
 </script>
 </body>
