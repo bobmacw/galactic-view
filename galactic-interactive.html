@@ -323,7 +323,7 @@
 //    Minor — a few new features or major bug fixes
 //    Patch — minor bug fixes, smallest increment
 // ═══════════════════════════════════════════════════════════════
-const VERSION = "1.2.0";
+const VERSION = "1.2.3";
 document.getElementById('versionDisplay').textContent = `v${VERSION}`;
 // ═══════════════════════════════════════════════════════════════
 //  3D MATH
@@ -487,6 +487,7 @@ const SEASONS = [
     orbitAngle: Math.PI*0.5,   // Earth at +Z ecliptic → tilts to -Y after ECL_TILT
     galBias: [0, -1.5, 0],     // strongly toward galactic south to overcome tilt
     quadrant: 'Down / In',
+    labelOffY: 0.10,           // arrow points down → push name label below tip (positive = down in canvas)
   },
   {
     name: 'Winter', color: '#64b5f6',
@@ -496,6 +497,7 @@ const SEASONS = [
     orbitAngle: 0,             // Earth at +X side of sun
     galBias: [0, 1.2, 0],      // strongly toward galactic north (+Y)
     quadrant: 'Up / Out',
+    quadrantOffY: -0.11,       // arrow points up → place quadrant label above tip
   },
   {
     name: 'Spring', color: '#a5d6a7',
@@ -504,6 +506,7 @@ const SEASONS = [
     orbitAngle: Math.PI*1.5,   // Earth at -Z ecliptic → tilts to +Y after ECL_TILT
     galBias: [0, 1.8, 0],      // very strongly toward galactic north pole
     quadrant: 'Up / Out (polar)',
+    quadrantOffY: -0.11,       // arrow points up → place quadrant label above tip
   },
 ];
 
@@ -768,7 +771,7 @@ function render() {
     ctx.beginPath(); ctx.arc(ep[0],ep[1],6,0,Math.PI*2);
     ctx.strokeStyle='rgba(255,255,255,0.8)'; ctx.lineWidth=1.5; ctx.stroke();
     label(sv(eu), 'EARTH', 'rgba(255,255,255,0.75)', 0, -s*0.07, 'center', 9);
-    label(sv(eu), 'Orion Spur, ~26kly from core', 'rgba(255,255,255,0.35)', 0, -s*0.1, 'center', 7);
+    label(sv(eu), 'Orion Spur, ~26kly from core', 'rgba(255,255,255,0.65)', s*0.30, -s*0.06, 'left', 7);
   });
 
   // ── Seasonal view arrows ─────────────────────────────────────
@@ -783,8 +786,8 @@ function render() {
     push(0, () => {
       dot(ePosS, s2.color, 5);
       drawArrow(ePosS, arrowTipS, s2.color, 2, 10);
-      label(arrowTipS, s2.name, s2.color, 0, -s*0.05, 'center', 8);
-      label(arrowTipS, s2.quadrant, 'rgba(255,255,255,0.45)', 0, s*0.03, 'center', 7);
+      label(arrowTipS, s2.name, s2.color, 0, s*(s2.labelOffY ?? -0.05), 'center', 8);
+      label(arrowTipS, s2.quadrant, 'rgba(255,255,255,0.75)', 0, s*(s2.quadrantOffY ?? 0.05), 'center', 7);
 
       // Small line from sun to Earth position (to show orbital connection)
       drawLine(sv(SUN_POS), ePosS, 'rgba(255,255,255,0.12)', 1, [2,4]);
