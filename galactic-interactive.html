@@ -104,6 +104,7 @@
   /* Canvas */
   #canvas {
     flex: 1;
+    min-width: 0;  /* Safari: allow canvas to shrink below its intrinsic pixel width */
     display: block;
     cursor: grab;
   }
@@ -323,7 +324,7 @@
 //    Minor — a few new features or major bug fixes
 //    Patch — minor bug fixes, smallest increment
 // ═══════════════════════════════════════════════════════════════
-const VERSION = "1.2.3";
+const VERSION = "1.3.0";
 document.getElementById('versionDisplay').textContent = `v${VERSION}`;
 // ═══════════════════════════════════════════════════════════════
 //  3D MATH
@@ -641,8 +642,12 @@ function polyDepth(pts3) {
 }
 
 function render() {
-  canvas.width = canvas.offsetWidth;
-  canvas.height = canvas.offsetHeight;
+  const rect = canvas.getBoundingClientRect();
+  const cw = Math.round(rect.width);
+  const ch = Math.round(rect.height);
+  if (!cw || !ch) return;
+  canvas.width  = cw;
+  canvas.height = ch;
   ctx.clearRect(0, 0, W(), H());
 
   // Fill dark background explicitly so iframe white doesn't show through
@@ -885,22 +890,42 @@ document.getElementById('toggles').querySelectorAll('.tog').forEach(btn => {
   });
 });
 
-// Reset button
-document.getElementById('resetBtn').addEventListener('click', () => {
+// Full reset — mirrors what page load does: restore default view state then render.
+// Used by the Reset button and the resize/orientationchange handlers so that a
+// window resize in Safari produces an identical result to a manual page refresh.
+function fullReset() {
   rotX = DEFAULT_RX; rotY = DEFAULT_RY; zoom = 1.0;
   render();
-});
+}
 
-// Resize observer — debounced to avoid ResizeObserver loop notifications
+// Reset button
+document.getElementById('resetBtn').addEventListener('click', fullReset);
+
+// ═══════════════════════════════════════════════════════════════
+//  RESIZE & LIFECYCLE
+//  Uses window resize / orientationchange instead of ResizeObserver
+//  on the canvas element. Observing the canvas caused a render loop
+//  on Chrome: setting canvas.width inside render() re-triggered the
+//  observer on every frame, producing continuous redraws and visible
+//  model drift. window resize events do not have this problem.
+// ═══════════════════════════════════════════════════════════════
+
 let resizeTimer = null;
-const ro = new ResizeObserver(() => {
-  if (resizeTimer) cancelAnimationFrame(resizeTimer);
-  resizeTimer = requestAnimationFrame(() => render());
-});
-ro.observe(canvas);
 
-// Initial render
-render();
+function scheduleReset(delay) {
+  if (resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    resizeTimer = null;
+    requestAnimationFrame(fullReset);
+  }, delay);
+}
+
+window.addEventListener('resize', () => scheduleReset(150));
+window.addEventListener('orientationchange', () => scheduleReset(275));
+
+// Initial render — one rAF lets the browser complete layout so
+// getBoundingClientRect() inside render() returns settled dimensions.
+requestAnimationFrame(() => render());
 </script>
 </body>
 </html>
