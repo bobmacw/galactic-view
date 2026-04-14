@@ -317,7 +317,7 @@
 //    Patch — minor bug fixes, smallest increment
 // ═══════════════════════════════════════════════════════════════
 // Simplify earth rendering - remove axix and poles, show shade instead.
-const VERSION = "1.4.0";
+const VERSION = "1.5.0";
 document.getElementById('versionDisplay').textContent = `v${VERSION}`;
 // ═══════════════════════════════════════════════════════════════
 //  3D MATH
@@ -481,7 +481,9 @@ const SEASONS = [
     orbitAngle: Math.PI*0.5,   // Earth at +Z ecliptic → tilts to -Y after ECL_TILT
     galBias: [0, -1.5, 0],     // strongly toward galactic south to overcome tilt
     quadrant: 'Down / In',
-    labelOffY: 0.10,           // arrow points down → push name label below tip (positive = down in canvas)
+    labelOffY: 0.14,           // arrow points down → name below tip; increased for larger font
+    quadrantOffY: 0.07,        // quadrant closer to tip than name; explicit so the two labels
+                               // are 0.07s apart (≈17 px) and don't overlap at size 11
   },
   {
     name: 'Winter', color: '#64b5f6',
@@ -491,7 +493,8 @@ const SEASONS = [
     orbitAngle: 0,             // Earth at +X side of sun
     galBias: [0, 1.2, 0],      // strongly toward galactic north (+Y)
     quadrant: 'Up / Out',
-    quadrantOffY: -0.11,       // arrow points up → place quadrant label above tip
+    quadrantOffY: -0.14,       // arrow points up → quadrant above tip; increased for larger font
+                               // name uses default −0.08 → gap between them is 0.06s ≈ 15 px
   },
   {
     name: 'Spring', color: '#a5d6a7',
@@ -500,7 +503,7 @@ const SEASONS = [
     orbitAngle: Math.PI*1.5,   // Earth at -Z ecliptic → tilts to +Y after ECL_TILT
     galBias: [0, 1.8, 0],      // very strongly toward galactic north pole
     quadrant: 'Up / Out (polar)',
-    quadrantOffY: -0.11,       // arrow points up → place quadrant label above tip
+    quadrantOffY: -0.14,       // arrow points up → quadrant above tip; increased for larger font
   },
 ];
 
@@ -620,11 +623,16 @@ function dot(p3, color, r) {
 
 function label(p3, text, color, offx, offy, align, size) {
   const p = proj(p3);
-  ctx.fillStyle = color||'#fff';
-  ctx.font = (size||9)+'px Space Mono';
+  ctx.font = (size||11)+'px Space Mono';
   ctx.textAlign = align||'center';
   ctx.textBaseline = 'middle';
+  // Dark shadow so labels read clearly over any geometry or disc
+  ctx.shadowColor = 'rgba(0, 0, 8, 0.95)';
+  ctx.shadowBlur = 5;
+  ctx.fillStyle = color||'#fff';
   ctx.fillText(text, p[0]+(offx||0), p[1]+(offy||0));
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
   ctx.textBaseline = 'alphabetic';
 }
 
@@ -748,8 +756,8 @@ function render() {
     ctx.fillStyle = gr; ctx.fill();
     ctx.beginPath(); ctx.arc(cp[0],cp[1],5,0,Math.PI*2);
     ctx.fillStyle='#5ab4ff'; ctx.fill();
-    label(sv(CORE_POS), 'GALACTIC CORE', 'rgba(90,180,255,0.95)', 0, s*0.1, 'center', 9);
-    label(sv(CORE_POS), '(Sagittarius)', 'rgba(130,190,255,0.6)', 0, s*0.155, 'center', 8);
+    label(sv(CORE_POS), 'GALACTIC CORE', 'rgba(90,180,255,0.95)', 0, s*0.14, 'center', 12);
+    label(sv(CORE_POS), '(Sagittarius)', 'rgba(130,190,255,0.6)', 0, s*0.21, 'center', 10);
   });
 
   // ── Galactic N/S axis ───────────────────────────────────────
@@ -758,8 +766,8 @@ function render() {
     drawLine(sv(CORE_POS), sv([0,-AXIS_L,0]),'rgba(239,154,154,0.6)', 1.5, [5,5]);
     dot(sv([0,AXIS_L,0]),  '#64b5f6', 4);
     dot(sv([0,-AXIS_L,0]), '#ef9a9a', 4);
-    label(sv([0,AXIS_L*1.08,0]),  'GAL. NORTH', '#64b5f6', 0, 0, 'center', 8);
-    label(sv([0,-AXIS_L*1.08,0]), 'GAL. SOUTH', '#ef9a9a', 0, 0, 'center', 8);
+    label(sv([0,AXIS_L*1.08,0]),  'GAL. NORTH', '#64b5f6', 0, -s*0.04, 'center', 11);
+    label(sv([0,-AXIS_L*1.08,0]), 'GAL. SOUTH', '#ef9a9a', 0,  s*0.04, 'center', 11);
   });
 
   // Z-axis cross line (faint orientation guide only)
@@ -771,10 +779,35 @@ function render() {
   // This ellipse IS the ecliptic — Earth's seasonal positions lie on it.
   // The separate larger ecliptic disc has been removed as redundant.
   const orbitPts = makeOrbit(ORBIT_R, 64).map(p=>sv(p));
+
+  // ── Pre-compute orbit screen extents for label placement ───────
+  // The ecliptic ring is projected to an ellipse whose screen-space extents
+  // vary with rotation. We measure them once per frame so that the EARTH, SUN,
+  // and ECLIPTIC labels can be positioned OUTSIDE the projected ellipse at all
+  // rotation angles, preventing overlap with the ring line.
+  const _sunScrn   = proj(sv(SUN_POS));
+  const _projOrbit = orbitPts.map(p => proj(p));
+  let _orbTopY = Infinity, _orbBotY = -Infinity;
+  let _orbFarIdx = 0, _orbFarDist = -Infinity;
+  _projOrbit.forEach((p, i) => {
+    if (p[1] < _orbTopY) _orbTopY = p[1];
+    if (p[1] > _orbBotY) _orbBotY = p[1];
+    // Track the orbit point furthest from the Sun/Earth dot in screen space —
+    // this becomes the anchor for the ECLIPTIC label, keeping it on the ring
+    // rim but as far from the crowded Earth/Sun/label cluster as possible.
+    const dx = p[0] - _sunScrn[0], dy = p[1] - _sunScrn[1];
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist > _orbFarDist) { _orbFarDist = dist; _orbFarIdx = i; }
+  });
+  // Fixed pixel clearance between the ring edge and the nearest label edge.
+  // 16 px is enough to read clearly without pushing labels too far at any
+  // viewport size (the ring stroke is only 1.4 px wide).
+  const RING_PAD = 16;
+
+
   push(polyDepth(orbitPts.slice(0,4)), () => {
     drawPoly(orbitPts, 'rgba(165,214,167,0.7)', 'rgba(165,214,167,0.04)', 1.4, [3,4]);
-    const rimPt = orbitPts[10];
-    label(rimPt, 'ECLIPTIC', 'rgba(165,214,167,0.75)', 0, -s*0.04, 'center', 8);
+    // ECLIPTIC label removed — ring is self-evident.
   });
 
   const eu = EARTH_POS;
@@ -791,7 +824,7 @@ function render() {
     ctx.fillStyle = sg; ctx.fill();
     ctx.beginPath(); ctx.arc(sp2[0],sp2[1],7,0,Math.PI*2);
     ctx.fillStyle='#ffe066'; ctx.fill();
-    label(sv(SUN_POS), 'SUN', 'rgba(255,224,80,0.9)', 0, s*0.065, 'center', 9);
+    // SUN label removed — the glowing dot is self-evident as the Sun.
   });
 
   // ── Earth ───────────────────────────────────────────────────
@@ -806,8 +839,15 @@ function render() {
     ctx.fillStyle='#a8d8ea'; ctx.fill();
     ctx.beginPath(); ctx.arc(ep[0],ep[1],6,0,Math.PI*2);
     ctx.strokeStyle='rgba(255,255,255,0.8)'; ctx.lineWidth=1.5; ctx.stroke();
-    label(sv(eu), 'EARTH', 'rgba(255,255,255,0.75)', 0, -s*0.07, 'center', 9);
-    label(sv(eu), 'Orion Spur, ~26kly from core', 'rgba(255,255,255,0.65)', s*0.30, -s*0.06, 'left', 7);
+    // EARTH label: place above the topmost point of the projected orbit ring.
+    // textBaseline is 'middle', so subtract half the font height so the text
+    // bottom sits RING_PAD above the ring's highest screen pixel.
+    const _earthLabelOffy = _orbTopY - RING_PAD - 6 - ep[1];
+    label(sv(eu), 'EARTH', 'rgba(255,255,255,0.75)', -20, _earthLabelOffy, 'center', 12);
+    // Secondary Earth label: positioned as a subtitle 14 px below the EARTH label,
+    // and s*0.34 ≈ 111 px to the right — well outside the ring's ~37 px rightmost
+    // screen extent, so no overlap risk with the ring or the centred EARTH label.
+    label(sv(eu), 'Orion Spur, ~26kly from core', 'rgba(255,255,255,0.65)', s*0.34, _earthLabelOffy + 14, 'left', 9);
   });
 
   // ── Seasonal view arrows ─────────────────────────────────────
@@ -831,8 +871,8 @@ function render() {
       const ep_s = proj(ePosS);
       drawShadedSphere(ep_s[0], ep_s[1], 15, L, s2.color);
       drawArrow(ePosS, arrowTipS, s2.color, 2, 10);
-      label(arrowTipS, s2.name, s2.color, 0, s*(s2.labelOffY ?? -0.05), 'center', 8);
-      label(arrowTipS, s2.quadrant, 'rgba(255,255,255,0.75)', 0, s*(s2.quadrantOffY ?? 0.05), 'center', 7);
+      label(arrowTipS, s2.name, s2.color, 0, s*(s2.labelOffY ?? -0.08), 'center', 11);
+      label(arrowTipS, s2.quadrant, 'rgba(255,255,255,0.75)', 0, s*(s2.quadrantOffY ?? 0.10), 'center', 9);
 
       // Small line from sun to Earth position (to show orbital connection)
       drawLine(sv(SUN_POS), ePosS, 'rgba(255,255,255,0.12)', 1, [2,4]);
