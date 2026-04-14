@@ -132,3 +132,8 @@ Canvas resize is handled by a `ResizeObserver` with `requestAnimationFrame` debo
 - **Coordinate system** — do not change the galactic coordinate convention (+Y north, +X anti-core, +Z toward viewer)
 - **Style** — maintain the existing dark void aesthetic; Cormorant Garamond + Space Mono font pairing is intentional
 - **Comments** — preserve the ═══ section banner style for new code sections
+
+## Developer Workflow Rules
+- Do not commit, push, or otherwise modify the repository. All version control actions are performed by the developer after reviewing and approving changes.
+- Do not modify the VERSION constant in the code unless specifically asked to do so by me
+- Comment extensively, both on the structure purpose of the code - but equally important, the reason(s)  for making the change - e.g. to address an issue, or implement a specific feature or change.
