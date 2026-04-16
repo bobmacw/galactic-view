@@ -276,7 +276,7 @@
           </div>
         </div>
         <div class="tog active" data-season="1">
-          <div class="tog-dot" style="background:#ce93d8;"></div>
+          <div class="tog-dot" style="background:#bf5230;"></div>
           <div>
             <div class="tog-label">Autumn</div>
             <div class="tog-quadrant">Down / In (trans.)</div>
@@ -466,7 +466,7 @@ function makeOrbit(r, n) {
 
 const SEASONS = [
   {
-    name: 'Summer', color: '#f5a623',
+    name: 'Summer - S', color: '#f5a623',
     // Summer: sun in Gemini/anti-core direction. Earth on core side (-X of sun).
     // Night side faces away from sun = toward core (-X direction).
     // Core sits low in galactic south at 42°N → strong -Y bias.
@@ -475,7 +475,7 @@ const SEASONS = [
     quadrant: 'Down / In',
   },
   {
-    name: 'Autumn', color: '#ce93d8',
+    name: 'Autumn - SW', color: '#bf5230',
     // Autumn: Earth at +Z side of ecliptic after tilt → raw anti-sun has -Y component.
     // Core still accessible but setting. Still Down/In — reinforce with strong -Y.
     orbitAngle: Math.PI*0.5,   // Earth at +Z ecliptic → tilts to -Y after ECL_TILT
@@ -486,7 +486,7 @@ const SEASONS = [
                                // are 0.07s apart (≈17 px) and don't overlap at size 11
   },
   {
-    name: 'Winter', color: '#64b5f6',
+    name: 'Winter - S/↑', color: '#64b5f6',
     // Winter: sun in Sagittarius/core direction. Earth on anti-core side (+X of sun).
     // Night side faces away from sun = toward anti-core (+X).
     // Anti-core rides high toward galactic north at 42°N → strong +Y bias.
@@ -497,7 +497,7 @@ const SEASONS = [
                                // name uses default −0.08 → gap between them is 0.06s ≈ 15 px
   },
   {
-    name: 'Spring', color: '#a5d6a7',
+    name: 'Spring - ↑/S', color: '#a5d6a7',
     // Spring: Earth at -Z ecliptic → raw anti-sun has +Y component after tilt.
     // Galactic north pole nearly overhead. Up/Out polar view → strong +Y.
     orbitAngle: Math.PI*1.5,   // Earth at -Z ecliptic → tilts to +Y after ECL_TILT
