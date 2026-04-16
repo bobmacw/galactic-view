@@ -59,6 +59,21 @@
     flex-shrink: 0;
   }
 
+  .header-info {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--label);
+    max-width: 200px;
+  }
+
+  .header-planes {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
   header h1 {
     font-family: 'Cormorant Garamond', serif;
     font-weight: 300;
@@ -225,6 +240,19 @@
     <h1>Galactic Geometry — <em>Interactive</em></h1>
     <p>Observer at 42°N · Drag to rotate · Scroll to zoom</p>
   </div>
+  <div class="header-info">
+    Rotate to find the angle where each seasonal arrow is clearest. The four arrows are fixed in space — only your viewpoint changes.
+  </div>
+  <div class="header-planes">
+    <div class="leg-item">
+      <div class="leg-swatch" style="background: rgba(245,166,35,0.9);"></div>
+      Galactic plane
+    </div>
+    <div class="leg-item">
+      <div class="leg-swatch dashed" style="color: rgba(165,214,167,0.8);"></div>
+      Ecliptic plane (Earth's orbit)
+    </div>
+  </div>
   <div class="hint">
     Drag to rotate<br>
     Scroll / pinch to zoom<br>
@@ -237,7 +265,7 @@
 
   <div class="sidebar">
 
-    <div class="sidebar-section">
+    <div class="sidebar-section" style="display:none">
       <div class="sidebar-title">Planes</div>
       <div class="leg-item">
         <div class="leg-swatch" style="background: rgba(245,166,35,0.9);"></div>
@@ -249,7 +277,7 @@
       </div>
     </div>
 
-    <div class="sidebar-section">
+    <div class="sidebar-section" style="display:none">
       <div class="sidebar-title">Axes</div>
       <div class="leg-item">
         <div class="leg-dot" style="background:#64b5f6;"></div>
@@ -265,7 +293,7 @@
       </div>
     </div>
 
-    <div class="sidebar-section">
+    <div class="sidebar-section" style="display:none">
       <div class="sidebar-title">Seasonal Views</div>
       <div class="season-toggles" id="toggles">
         <div class="tog active" data-season="0">
@@ -299,7 +327,7 @@
       </div>
     </div>
 
-    <div class="info-box">
+    <div class="info-box" style="display:none">
       Rotate to find the angle where each seasonal arrow is clearest. The four arrows are fixed in space — only your viewpoint changes.
     </div>
 
