@@ -413,6 +413,20 @@ function nightViewArrow(earthPos, galBias, arrowLen) {
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
+// ── Starfield ───────────────────────────────────────────────────
+// Generated once at startup. Positions are stored as fractions of
+// canvas dimensions (0–1) so the field covers the full canvas at
+// any size or orientation without needing to regenerate on resize.
+// Size (0.5–1.5 px) and opacity (0.15–0.75) vary randomly to
+// suggest differences in stellar brightness.
+const STAR_COUNT = 350;
+const stars = Array.from({length: STAR_COUNT}, () => ({
+  x: Math.random(),
+  y: Math.random(),
+  r: 0.5 + Math.random(),
+  a: 0.15 + Math.random() * 0.60,
+}));
+
 // Shallower tilt (rotX) spreads the disc across the full-width canvas;
 // rotY gives a gentle perspective angle on the galactic plane.
 let rotX = 0.32, rotY = -0.50;
@@ -588,6 +602,16 @@ function render() {
   // Fill dark background explicitly so iframe white doesn't show through
   ctx.fillStyle = '#03040c';
   ctx.fillRect(0, 0, W(), H());
+
+  // Draw starfield before all 3D elements so the model renders on top.
+  // Fractional x/y positions scale to current canvas dimensions each frame,
+  // so the field always covers the full canvas after resize or orientation change.
+  stars.forEach(s => {
+    ctx.beginPath();
+    ctx.arc(s.x * W(), s.y * H(), s.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,255,${s.a})`;
+    ctx.fill();
+  });
 
   // Scale so the model fills the full-width canvas at any aspect ratio.
   // W() * 0.40 prevents over-scaling on very wide screens; H() * 0.44 is the
