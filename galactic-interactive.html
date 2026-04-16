@@ -125,31 +125,6 @@
   }
   #canvas:active { cursor: grabbing; }
 
-  /* Side panel */
-  .sidebar {
-    width: 220px;
-    flex-shrink: 0;
-    background: var(--panel);
-    border-left: 1px solid var(--border);
-    padding: 20px 16px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .sidebar-section { }
-
-  .sidebar-title {
-    font-size: 0.55rem;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--label);
-    margin-bottom: 12px;
-    padding-bottom: 7px;
-    border-bottom: 1px solid var(--border);
-  }
-
   /* Legend items */
   .leg-item {
     display: flex;
@@ -176,61 +151,6 @@
     width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
   }
 
-  /* Season toggles */
-  .season-toggles {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .tog {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.62rem;
-    cursor: pointer;
-    padding: 5px 8px;
-    border: 1px solid transparent;
-    transition: border-color 0.2s;
-  }
-  .tog:hover { border-color: rgba(255,255,255,0.15); }
-  .tog.active { border-color: rgba(255,255,255,0.25); }
-
-  .tog-dot {
-    width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
-  }
-
-  .tog-label { flex: 1; }
-  .tog-quadrant { font-size: 0.55rem; color: var(--label); }
-
-  /* Reset button */
-  .reset-btn {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--label);
-    font-family: 'Space Mono', monospace;
-    font-size: 0.6rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 8px 12px;
-    cursor: pointer;
-    width: 100%;
-    transition: all 0.2s;
-    margin-top: auto;
-  }
-  .reset-btn:hover { border-color: rgba(255,255,255,0.3); color: #fff; }
-
-  /* Info box at bottom of sidebar */
-  .info-box {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid var(--border);
-    padding: 10px 12px;
-    font-family: 'Cormorant Garamond', serif;
-    font-style: italic;
-    font-size: 0.82rem;
-    line-height: 1.6;
-    color: var(--label);
-  }
 </style>
 </head>
 <body>
@@ -262,78 +182,6 @@
 
 <div class="main">
   <canvas id="canvas"></canvas>
-
-  <div class="sidebar">
-
-    <div class="sidebar-section" style="display:none">
-      <div class="sidebar-title">Planes</div>
-      <div class="leg-item">
-        <div class="leg-swatch" style="background: rgba(245,166,35,0.9);"></div>
-        Galactic plane
-      </div>
-      <div class="leg-item">
-        <div class="leg-swatch dashed" style="color: rgba(165,214,167,0.8);"></div>
-        Ecliptic plane (Earth's orbit)
-      </div>
-    </div>
-
-    <div class="sidebar-section" style="display:none">
-      <div class="sidebar-title">Axes</div>
-      <div class="leg-item">
-        <div class="leg-dot" style="background:#64b5f6;"></div>
-        Galactic north pole
-      </div>
-      <div class="leg-item">
-        <div class="leg-dot" style="background:#ef9a9a;"></div>
-        Galactic south pole
-      </div>
-      <div class="leg-item">
-        <div class="leg-dot" style="background:#e8c87a;"></div>
-        Galactic core (Sagittarius)
-      </div>
-    </div>
-
-    <div class="sidebar-section" style="display:none">
-      <div class="sidebar-title">Seasonal Views</div>
-      <div class="season-toggles" id="toggles">
-        <div class="tog active" data-season="0">
-          <div class="tog-dot" style="background:#f5a623;"></div>
-          <div>
-            <div class="tog-label">Summer</div>
-            <div class="tog-quadrant">Down / In</div>
-          </div>
-        </div>
-        <div class="tog active" data-season="1">
-          <div class="tog-dot" style="background:#bf5230;"></div>
-          <div>
-            <div class="tog-label">Autumn</div>
-            <div class="tog-quadrant">Down / In (trans.)</div>
-          </div>
-        </div>
-        <div class="tog active" data-season="2">
-          <div class="tog-dot" style="background:#64b5f6;"></div>
-          <div>
-            <div class="tog-label">Winter</div>
-            <div class="tog-quadrant">Up / Out</div>
-          </div>
-        </div>
-        <div class="tog active" data-season="3">
-          <div class="tog-dot" style="background:#a5d6a7;"></div>
-          <div>
-            <div class="tog-label">Spring</div>
-            <div class="tog-quadrant">Up / Out (polar)</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="info-box" style="display:none">
-      Rotate to find the angle where each seasonal arrow is clearest. The four arrows are fixed in space — only your viewpoint changes.
-    </div>
-
-    <button class="reset-btn" id="resetBtn">Reset View</button>
-
-  </div>
 </div>
 
 <script>
@@ -566,12 +414,14 @@ function nightViewArrow(earthPos, galBias, arrowLen) {
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
-let rotX = 0.38, rotY = -0.55;  // initial view
+// Shallower tilt (rotX) spreads the disc across the full-width canvas;
+// rotY gives a gentle perspective angle on the galactic plane.
+let rotX = 0.32, rotY = -0.50;
 let zoom = 1.0;
 let dragging = false, lastX = 0, lastY = 0;
 let seasonVisible = [true, true, true, true];
 
-const DEFAULT_RX = 0.38, DEFAULT_RY = -0.55;
+const DEFAULT_RX = 0.32, DEFAULT_RY = -0.50;
 
 // ═══════════════════════════════════════════════════════════════
 //  DRAW
@@ -740,8 +590,11 @@ function render() {
   ctx.fillStyle = '#03040c';
   ctx.fillRect(0, 0, W(), H());
 
-  const SCALE = Math.min(W(), H()) * 0.41 * zoom;
-  // Override zoom into project by updating zoom variable used in proj()
+  // Scale so the model fills the full-width canvas at any aspect ratio.
+  // W() * 0.40 prevents over-scaling on very wide screens; H() * 0.44 is the
+  // binding constraint in typical landscape, producing ~7% larger model than
+  // the old sidebar layout. In portrait the W term takes over automatically.
+  const SCALE = Math.min(W() * 0.40, H() * 0.44) * zoom;
 
   const GAL_R   = 1.15;  // galactic disk radius — larger (+15%)
   const CEQ_R   = 0.17;  // celestial equator radius — smaller (-15%)
@@ -987,27 +840,13 @@ canvas.addEventListener('touchstart', onTouchStart, {passive: false});
 canvas.addEventListener('touchmove', onTouchMove, {passive: false});
 canvas.addEventListener('touchend', onTouchEnd);
 
-// Season toggle buttons
-document.getElementById('toggles').querySelectorAll('.tog').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const i = parseInt(btn.dataset.season);
-    seasonVisible[i] = !seasonVisible[i];
-    btn.classList.toggle('active', seasonVisible[i]);
-    btn.style.opacity = seasonVisible[i] ? '1' : '0.35';
-    render();
-  });
-});
-
 // Full reset — mirrors what page load does: restore default view state then render.
-// Used by the Reset button and the resize/orientationchange handlers so that a
-// window resize in Safari produces an identical result to a manual page refresh.
+// Used by the resize/orientationchange handlers so that a window resize in Safari
+// produces an identical result to a manual page refresh.
 function fullReset() {
   rotX = DEFAULT_RX; rotY = DEFAULT_RY; zoom = 1.0;
   render();
 }
-
-// Reset button
-document.getElementById('resetBtn').addEventListener('click', fullReset);
 
 // ═══════════════════════════════════════════════════════════════
 //  RESIZE & LIFECYCLE
