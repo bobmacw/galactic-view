@@ -772,7 +772,7 @@ function render() {
       ]);
       const L = applyRot(toSun, rotX, rotY);
       const ep_s = proj(ePosS);
-      drawShadedSphere(ep_s[0], ep_s[1], 15, L, s2.color);
+      drawShadedSphere(ep_s[0], ep_s[1], 12.75, L, s2.color); // -15% radius
       drawArrow(ePosS, arrowTipS, s2.color, 2, 10);
       label(arrowTipS, s2.name, s2.color, 0, s*(s2.labelOffY ?? -0.08), 'center', 16);
       label(arrowTipS, s2.quadrant, 'rgba(255,255,255,0.75)', 0, s*(s2.quadrantOffY ?? 0.10), 'center', 16);
@@ -788,7 +788,7 @@ function render() {
         // The sphere is drawn at a fixed 15 screen-px radius regardless of
         // zoom. Converting to unit space: poleOffset = (15+margin) / s ensures
         // the stubs start visually outside the sphere at all zoom levels.
-        const poleOffset = (15 + 3) / s;   // unit-space offset to clear sphere
+        const poleOffset = (12.75 + 3) / s;   // unit-space offset to clear sphere
         const stubLen    = 10 / s;          // stub length (≈10 screen px)
 
         // North pole stub end-points in unit space, along +rotAxisN
