@@ -64,7 +64,8 @@
     font-size: 1.1rem;
     line-height: 1.5;
     color: var(--label);
-    width: 30em;  /* sized so each sentence wraps to its own line */
+    text-align: center;
+    width: 34em;
   }
 
   .header-planes {
@@ -99,12 +100,6 @@
     font-family: 'Space Mono', monospace;
   }
 
-  .hint {
-    font-size: 0.80rem;
-    letter-spacing: 0.1em;
-    color: var(--label);
-    text-align: right;
-  }
 
   /* Main layout */
   .main {
@@ -158,9 +153,10 @@
   <div>
     <h1>Galactic Geometry — <em>Interactive</em></h1>
     <p>Observer at 42°N · Drag to rotate · Scroll to zoom</p>
+    <div class="version-display" id="versionDisplay"></div>
   </div>
   <div class="header-info">
-    Rotate to find the angle where each seasonal arrow is clearest. The four arrows are fixed in space — only your viewpoint changes.
+    Rotate to find the angle where each seasonal arrow is clearest. The four arrows are fixed in space — only your viewpoint changes. Drag to rotate · Scroll / pinch to zoom.
   </div>
   <div class="header-planes">
     <div class="leg-item">
@@ -171,11 +167,6 @@
       <div class="leg-swatch dashed" style="color: rgba(165,214,167,0.8);"></div>
       Ecliptic plane (Earth's orbit)
     </div>
-  </div>
-  <div class="hint">
-    Drag to rotate<br>
-    Scroll / pinch to zoom<br>
-    <div class="version-display" id="versionDisplay"></div>
   </div>
 </header>
 
