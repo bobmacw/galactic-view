@@ -339,6 +339,10 @@ const SEASONS = [
     orbitAngle: Math.PI,       // Earth at -X side of sun
     galBias: [0, -1.2, 0],     // strongly toward galactic south (-Y)
     quadrant: 'Down / In',
+    // Arrow points down → both labels below tip. Name on top (smaller +offset),
+    // quadrant directly beneath it. Consistent two-line block for all down arrows.
+    labelOffY: 0.07,           // name just below tip (top of two-line block)
+    quadrantOffY: 0.14,        // quadrant below name (bottom of two-line block)
   },
   {
     name: 'Autumn - SW', color: '#bf5230',
@@ -347,9 +351,9 @@ const SEASONS = [
     orbitAngle: Math.PI*0.5,   // Earth at +Z ecliptic → tilts to -Y after ECL_TILT
     galBias: [0, -1.5, 0],     // strongly toward galactic south to overcome tilt
     quadrant: 'Down / In',
-    labelOffY: 0.14,           // arrow points down → name below tip; increased for larger font
-    quadrantOffY: 0.07,        // quadrant closer to tip than name; explicit so the two labels
-                               // are 0.07s apart (≈17 px) and don't overlap at size 11
+    // Arrow points down → same two-line block layout as Summer.
+    labelOffY: 0.07,           // name just below tip (top of two-line block)
+    quadrantOffY: 0.14,        // quadrant below name (bottom of two-line block)
   },
   {
     name: 'Winter - S/↑', color: '#64b5f6',
@@ -359,8 +363,10 @@ const SEASONS = [
     orbitAngle: 0,             // Earth at +X side of sun
     galBias: [0, 1.2, 0],      // strongly toward galactic north (+Y)
     quadrant: 'Up / Out',
-    quadrantOffY: -0.14,       // arrow points up → quadrant above tip; increased for larger font
-                               // name uses default −0.08 → gap between them is 0.06s ≈ 15 px
+    // Arrow points up → both labels above tip. Name on top (more negative offset),
+    // quadrant directly beneath it. Consistent two-line block for all up arrows.
+    labelOffY: -0.14,          // name further above tip (top of two-line block)
+    quadrantOffY: -0.07,       // quadrant just above tip (bottom of two-line block)
   },
   {
     name: 'Spring - ↑/S', color: '#a5d6a7',
@@ -369,7 +375,9 @@ const SEASONS = [
     orbitAngle: Math.PI*1.5,   // Earth at -Z ecliptic → tilts to +Y after ECL_TILT
     galBias: [0, 1.8, 0],      // very strongly toward galactic north pole
     quadrant: 'Up / Out (polar)',
-    quadrantOffY: -0.14,       // arrow points up → quadrant above tip; increased for larger font
+    // Arrow points up → same two-line block layout as Winter.
+    labelOffY: -0.14,          // name further above tip (top of two-line block)
+    quadrantOffY: -0.07,       // quadrant just above tip (bottom of two-line block)
   },
 ];
 
