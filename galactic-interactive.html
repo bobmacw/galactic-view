@@ -183,7 +183,7 @@
 //    Patch — minor bug fixes, smallest increment
 // ═══════════════════════════════════════════════════════════════
 // Simplify earth rendering - remove axix and poles, show shade instead.
-const VERSION = "1.7.0"; // Add rotation axes to earth orbs
+const VERSION = "1.7.1"; // Simplify Winter and Spring season name labels
 document.getElementById('versionDisplay').textContent = `v${VERSION}`;
 // ═══════════════════════════════════════════════════════════════
 //  3D MATH
@@ -356,7 +356,7 @@ const SEASONS = [
     quadrantOffY: 0.14,        // quadrant below name (bottom of two-line block)
   },
   {
-    name: 'Winter - S/↑', color: '#64b5f6',
+    name: 'Winter - ↑', color: '#64b5f6',
     // Winter: sun in Sagittarius/core direction. Earth on anti-core side (+X of sun).
     // Night side faces away from sun = toward anti-core (+X).
     // Anti-core rides high toward galactic north at 42°N → strong +Y bias.
@@ -369,7 +369,7 @@ const SEASONS = [
     quadrantOffY: -0.07,       // quadrant just above tip (bottom of two-line block)
   },
   {
-    name: 'Spring - ↑/S', color: '#a5d6a7',
+    name: 'Spring - ↑', color: '#a5d6a7',
     // Spring: Earth at -Z ecliptic → raw anti-sun has +Y component after tilt.
     // Galactic north pole nearly overhead. Up/Out polar view → strong +Y.
     orbitAngle: Math.PI*1.5,   // Earth at -Z ecliptic → tilts to +Y after ECL_TILT
