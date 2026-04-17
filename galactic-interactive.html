@@ -92,10 +92,10 @@
   }
 
   .version-display {
-    font-size: 0.55rem;
+    font-size: 0.65rem;
     letter-spacing: 0.08em;
-    color: rgba(138, 154, 184, 0.45);
-    text-align: right;
+    color: rgba(138, 154, 184, 0.75);
+    text-align: left;
     margin-top: 4px;
     font-family: 'Space Mono', monospace;
   }
@@ -183,7 +183,7 @@
 //    Patch — minor bug fixes, smallest increment
 // ═══════════════════════════════════════════════════════════════
 // Simplify earth rendering - remove axix and poles, show shade instead.
-const VERSION = "1.6.1"; // Match directional label font size to season name label font size
+const VERSION = "1.6.3"; // Add rotation axis indicator to Winter Earth
 document.getElementById('versionDisplay').textContent = `v${VERSION}`;
 // ═══════════════════════════════════════════════════════════════
 //  3D MATH
@@ -779,6 +779,98 @@ function render() {
 
       // Small line from sun to Earth position (to show orbital connection)
       drawLine(sv(SUN_POS), ePosS, 'rgba(255,255,255,0.12)', 1, [2,4]);
+
+      // ── Winter only: Earth rotation axis indicator ────────────────
+      // Shows Earth's rotation axis as two short stubs protruding from the
+      // north and south poles of the sphere, plus a small CCW curved arrow
+      // at the north tip. Displayed on Winter only because that season best
+      // illustrates the galactic north (Up/Out) view and the axis orientation
+      // relative to the galactic plane is most informative there.
+      if (i === 2) {
+        // The sphere is drawn at a fixed 15 screen-px radius regardless of
+        // zoom. Converting to unit space: poleOffset = (15+margin) / s ensures
+        // the stubs start visually outside the sphere at all zoom levels.
+        const poleOffset = (15 + 3) / s;   // unit-space offset to clear sphere
+        const stubLen    = 10 / s;          // stub length (≈10 screen px)
+
+        // North pole stub end-points in unit space, along +rotAxisN
+        const nBase = [
+          capturedEPos[0] + rotAxisN[0] * poleOffset,
+          capturedEPos[1] + rotAxisN[1] * poleOffset,
+          capturedEPos[2] + rotAxisN[2] * poleOffset,
+        ];
+        const nTip = [
+          capturedEPos[0] + rotAxisN[0] * (poleOffset + stubLen),
+          capturedEPos[1] + rotAxisN[1] * (poleOffset + stubLen),
+          capturedEPos[2] + rotAxisN[2] * (poleOffset + stubLen),
+        ];
+        // South pole stub end-points along -rotAxisN
+        const sBase = [
+          capturedEPos[0] - rotAxisN[0] * poleOffset,
+          capturedEPos[1] - rotAxisN[1] * poleOffset,
+          capturedEPos[2] - rotAxisN[2] * poleOffset,
+        ];
+        const sTip = [
+          capturedEPos[0] - rotAxisN[0] * (poleOffset + stubLen),
+          capturedEPos[1] - rotAxisN[1] * (poleOffset + stubLen),
+          capturedEPos[2] - rotAxisN[2] * (poleOffset + stubLen),
+        ];
+
+        const axisColor = 'rgba(255,255,255,0.65)';
+        drawLine(sv(nBase), sv(nTip), axisColor, 1.5);
+        drawLine(sv(sBase), sv(sTip), axisColor, 1.5);
+
+        // ── CCW rotation arc at north tip ─────────────────────────────
+        // Build an orthonormal basis {uVec, vVec} for the plane perpendicular
+        // to rotAxisN. By construction cross(uVec, vVec) = rotAxisN, so
+        // increasing arc angle is CCW when viewed from the +rotAxisN side
+        // (Earth's north pole) — matching Earth's actual west-to-east rotation.
+        let uVec = cross3(rotAxisN, [0, 1, 0]);
+        if (dot3(uVec, uVec) < 0.001) uVec = cross3(rotAxisN, [1, 0, 0]);
+        uVec = normalize(uVec);
+        const vVec = normalize(cross3(rotAxisN, uVec));
+
+        const arcR    = 7.9 / s;          // arc radius ≈ 7.9 screen px (+15% diameter)
+        const arcGap  = Math.PI * 0.22;  // gap at non-arrow end, keeping arrowhead visually separate
+        const arcSpan = Math.PI * 2 - arcGap;
+        const arcSegs = 16;
+        const arcColor = 'rgba(255,255,255,0.6)';
+
+        // Helper: 3D point on the arc at angle t, centered on nTip
+        const mkArcPt = t => [
+          nTip[0] + arcR * (Math.cos(t) * uVec[0] + Math.sin(t) * vVec[0]),
+          nTip[1] + arcR * (Math.cos(t) * uVec[1] + Math.sin(t) * vVec[1]),
+          nTip[2] + arcR * (Math.cos(t) * uVec[2] + Math.sin(t) * vVec[2]),
+        ];
+
+        // Draw arc as 3D line segments so it foreshortens with rotation
+        for (let k = 0; k < arcSegs; k++) {
+          const t0 = arcGap + arcSpan * (k       / arcSegs);
+          const t1 = arcGap + arcSpan * ((k + 1) / arcSegs);
+          drawLine(sv(mkArcPt(t0)), sv(mkArcPt(t1)), arcColor, 1.2);
+        }
+
+        // Arrowhead at the arc end — drawn in screen space for clean look.
+        // Sample two nearby arc points to derive the screen-space tangent.
+        const tEnd  = arcGap + arcSpan;
+        const scrnEnd = proj(sv(mkArcPt(tEnd)));
+        const scrnPre = proj(sv(mkArcPt(tEnd - 0.18)));
+        const adx = scrnEnd[0] - scrnPre[0], ady = scrnEnd[1] - scrnPre[1];
+        const alen = Math.sqrt(adx * adx + ady * ady);
+        if (alen > 0.5) {
+          const atx = adx / alen, aty = ady / alen;  // tangent unit vector
+          const anx = -aty,       any = atx;          // normal to tangent
+          // Solid filled triangle arrowhead
+          const hs = 4;   // arrowhead half-size in pixels
+          ctx.beginPath();
+          ctx.moveTo(scrnEnd[0] + atx * hs * 1.5,      scrnEnd[1] + aty * hs * 1.5);
+          ctx.lineTo(scrnEnd[0] - atx * hs + anx * hs, scrnEnd[1] - aty * hs + any * hs);
+          ctx.lineTo(scrnEnd[0] - atx * hs - anx * hs, scrnEnd[1] - aty * hs - any * hs);
+          ctx.closePath();
+          ctx.fillStyle = arcColor;
+          ctx.fill();
+        }
+      }
     });
   });
 
