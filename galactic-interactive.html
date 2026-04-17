@@ -183,7 +183,7 @@
 //    Patch — minor bug fixes, smallest increment
 // ═══════════════════════════════════════════════════════════════
 // Simplify earth rendering - remove axix and poles, show shade instead.
-const VERSION = "1.6.0"; // Eliminate side bar and move legend to header
+const VERSION = "1.6.1"; // Match directional label font size to season name label font size
 document.getElementById('versionDisplay').textContent = `v${VERSION}`;
 // ═══════════════════════════════════════════════════════════════
 //  3D MATH
@@ -775,7 +775,7 @@ function render() {
       drawShadedSphere(ep_s[0], ep_s[1], 15, L, s2.color);
       drawArrow(ePosS, arrowTipS, s2.color, 2, 10);
       label(arrowTipS, s2.name, s2.color, 0, s*(s2.labelOffY ?? -0.08), 'center', 16);
-      label(arrowTipS, s2.quadrant, 'rgba(255,255,255,0.75)', 0, s*(s2.quadrantOffY ?? 0.10), 'center', 13);
+      label(arrowTipS, s2.quadrant, 'rgba(255,255,255,0.75)', 0, s*(s2.quadrantOffY ?? 0.10), 'center', 16);
 
       // Small line from sun to Earth position (to show orbital connection)
       drawLine(sv(SUN_POS), ePosS, 'rgba(255,255,255,0.12)', 1, [2,4]);
