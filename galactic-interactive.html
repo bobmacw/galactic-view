@@ -780,13 +780,11 @@ function render() {
       // Small line from sun to Earth position (to show orbital connection)
       drawLine(sv(SUN_POS), ePosS, 'rgba(255,255,255,0.12)', 1, [2,4]);
 
-      // ── Winter only: Earth rotation axis indicator ────────────────
+      // ── Earth rotation axis indicator (all seasons) ──────────────
       // Shows Earth's rotation axis as two short stubs protruding from the
       // north and south poles of the sphere, plus a small CCW curved arrow
-      // at the north tip. Displayed on Winter only because that season best
-      // illustrates the galactic north (Up/Out) view and the axis orientation
-      // relative to the galactic plane is most informative there.
-      if (i === 2) {
+      // at the north tip. Same rotAxisN orientation and styling for all seasons.
+      {
         // The sphere is drawn at a fixed 15 screen-px radius regardless of
         // zoom. Converting to unit space: poleOffset = (15+margin) / s ensures
         // the stubs start visually outside the sphere at all zoom levels.
