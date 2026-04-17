@@ -63,15 +63,25 @@
     font-family: 'Cormorant Garamond', serif;
     font-size: 1.1rem;
     line-height: 1.5;
-    color: var(--label);
+    color: rgba(200, 212, 232, 0.85);
     text-align: center;
     width: 34em;
+    text-wrap: balance;
+  }
+  .header-info-sub {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.0rem;
+    line-height: 1.5;
+    color: rgba(200, 212, 232, 0.85);
+    text-align: center;
+    margin-top: 0.25em;
   }
 
   .header-planes {
     display: flex;
     flex-direction: column;
     gap: 6px;
+    flex-shrink: 0;
   }
 
   header h1 {
@@ -80,6 +90,7 @@
     font-size: 1.35rem;
     letter-spacing: 0.04em;
     color: #fff;
+    white-space: nowrap;
   }
 
   header h1 em { font-style: italic; color: #e8c87a; }
@@ -128,6 +139,7 @@
     font-size: 0.80rem;
     color: var(--label);
     line-height: 1.4;
+    white-space: nowrap;
   }
 
   .leg-swatch {
@@ -156,7 +168,8 @@
     <div class="version-display" id="versionDisplay"></div>
   </div>
   <div class="header-info">
-    Rotate to find the angle where each seasonal arrow is clearest. The four arrows are fixed in space — only your viewpoint changes. Drag to rotate · Scroll / pinch to zoom.
+    Rotate to find where each seasonal arrow is clearest. The arrows are fixed in space — only the viewpoint changes.
+    <div class="header-info-sub">S/SW = compass direction to face — ↑ = look overhead</div>
   </div>
   <div class="header-planes">
     <div class="leg-item">
@@ -750,7 +763,8 @@ function render() {
     // Secondary Earth label: positioned as a subtitle 14 px below the EARTH label,
     // and s*0.34 ≈ 111 px to the right — well outside the ring's ~37 px rightmost
     // screen extent, so no overlap risk with the ring or the centred EARTH label.
-    label(sv(eu), 'Orion Spur, ~26kly from core', 'rgba(255,255,255,0.65)', s*0.34, _earthLabelOffy + 14, 'left', 9);
+    // disabled for now — for future implementation
+    // label(sv(eu), 'Orion Spur, ~26kly from core', 'rgba(255,255,255,0.65)', s*0.34, _earthLabelOffy + 14, 'left', 9);
   });
 
   // ── Seasonal view arrows ─────────────────────────────────────
