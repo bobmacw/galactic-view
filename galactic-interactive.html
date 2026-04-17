@@ -660,8 +660,8 @@ function render() {
     ctx.fillStyle = gr; ctx.fill();
     ctx.beginPath(); ctx.arc(cp[0],cp[1],5,0,Math.PI*2);
     ctx.fillStyle='#5ab4ff'; ctx.fill();
-    label(sv(CORE_POS), 'GALACTIC CORE', 'rgba(90,180,255,0.95)', 0, s*0.14, 'center', 12);
-    label(sv(CORE_POS), '(Sagittarius)', 'rgba(130,190,255,0.6)', 0, s*0.21, 'center', 10);
+    label(sv(CORE_POS), 'GALACTIC CORE', 'rgba(90,180,255,0.95)', 0, s*-0.24, 'center', 12);
+    label(sv(CORE_POS), '(Sagittarius)', 'rgba(130,190,255,0.6)', 0, s*-0.18, 'center', 10);
   });
 
   // ── Galactic N/S axis ───────────────────────────────────────
@@ -775,8 +775,8 @@ function render() {
       const ep_s = proj(ePosS);
       drawShadedSphere(ep_s[0], ep_s[1], 15, L, s2.color);
       drawArrow(ePosS, arrowTipS, s2.color, 2, 10);
-      label(arrowTipS, s2.name, s2.color, 0, s*(s2.labelOffY ?? -0.08), 'center', 11);
-      label(arrowTipS, s2.quadrant, 'rgba(255,255,255,0.75)', 0, s*(s2.quadrantOffY ?? 0.10), 'center', 9);
+      label(arrowTipS, s2.name, s2.color, 0, s*(s2.labelOffY ?? -0.08), 'center', 16);
+      label(arrowTipS, s2.quadrant, 'rgba(255,255,255,0.75)', 0, s*(s2.quadrantOffY ?? 0.10), 'center', 13);
 
       // Small line from sun to Earth position (to show orbital connection)
       drawLine(sv(SUN_POS), ePosS, 'rgba(255,255,255,0.12)', 1, [2,4]);
