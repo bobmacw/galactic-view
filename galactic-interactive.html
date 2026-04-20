@@ -196,7 +196,7 @@
 //    Patch — minor bug fixes, smallest increment
 // ═══════════════════════════════════════════════════════════════
 // Simplify earth rendering - remove axix and poles, show shade instead.
-const VERSION = "1.7.2"; // Header layout and spacing improvements
+const VERSION = "1.7.3"; // Fix rotAxisN: correct ecliptic-normal rotation by 23.5° toward +X
 document.getElementById('versionDisplay').textContent = `v${VERSION}`;
 // ═══════════════════════════════════════════════════════════════
 //  3D MATH
@@ -258,21 +258,25 @@ const ECL_TILT = 60*DEG;
 const eclNormal = normalize([0, Math.cos(ECL_TILT), -Math.sin(ECL_TILT)]);
 // = [0, 0.5, -0.866]
 
-// Earth's rotation axis: 23.5° from ecliptic normal, tilted toward +X.
-// Correct construction: start from ecliptic normal and rotate 23.5° toward +X.
-// We rotate eclNormal by AXIS_TILT around the Z axis (which tilts it toward +X):
-//   rotAxisN = eclNormal rotated 23.5° toward +X in the XY plane
-// eclNormal = (0, cos60, -sin60)
-// Rotating toward +X by 23.5°:
-//   x' = 0·cos(23.5°) - ... actually simplest: rotate the Y component toward X
-// In the YX plane: new_x = eclNy·sin(AXIS_TILT), new_y = eclNy·cos(AXIS_TILT)
-// Z component unchanged.
+// Earth's rotation axis: ecliptic normal rotated exactly 23.5° toward +X.
+//
+// Since eclNormal = [0, cos(ECL_TILT), -sin(ECL_TILT)] has no X component,
+// +X is already perpendicular to eclNormal. A rotation by AXIS_TILT in the
+// plane spanned by {eclNormal, +X} is therefore:
+//
+//   rotAxisN = cos(AXIS_TILT)·eclNormal + sin(AXIS_TILT)·[1,0,0]
+//            = [sin(AXIS_TILT),
+//               cos(AXIS_TILT)·cos(ECL_TILT),
+//              -cos(AXIS_TILT)·sin(ECL_TILT)]
+//
+// This is already unit-length (no normalize needed), and by construction:
+//   dot(rotAxisN, eclNormal) = cos(AXIS_TILT) = cos(23.5°) ≈ 0.9178  ✓
 const AXIS_TILT = 23.5*DEG;
-const rotAxisN = normalize([
-  Math.cos(ECL_TILT) * Math.sin(AXIS_TILT),   // x: eclNy · sin(23.5°)
-  Math.cos(ECL_TILT) * Math.cos(AXIS_TILT),   // y: eclNy · cos(23.5°)
- -Math.sin(ECL_TILT)                           // z: unchanged from ecliptic normal
-]);
+const rotAxisN = [
+  Math.sin(AXIS_TILT),                          // x: sin(23.5°) ≈ 0.3987
+  Math.cos(AXIS_TILT) * Math.cos(ECL_TILT),     // y: cos(23.5°)·cos(60°) ≈ 0.4589
+ -Math.cos(AXIS_TILT) * Math.sin(ECL_TILT),     // z: -cos(23.5°)·sin(60°) ≈ -0.7950
+];
 const rotAxisS = scale3(rotAxisN, -1);
 
 // Earth/Sun position: ~58% from galactic centre toward anti-core (+X)
