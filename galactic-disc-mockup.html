@@ -120,17 +120,27 @@ let dragging = false, lastX = 0, lastY = 0;
 const DEFAULT_RX = 0.32, DEFAULT_RY = -0.50;
 
 // pre-generate cloudy-disc particles once, in normalized galactic-plane
-// coordinates (same XZ plane / y=0 as the galactic disc ellipse), so they
-// scale and rotate identically to the rest of the scene every frame.
+// coordinates (XZ plane, with a vertical y thickness), so they scale and
+// rotate identically to the rest of the scene every frame. The disc has
+// real volume: a thicker central bulge that flattens toward the rim,
+// like a lens/frisbee rather than a zero-thickness sheet.
 const GAL_R_CONST = 1.15;
 const PARTICLE_COUNT = 9000;
+const BULGE_THICKNESS = 0.16;   // vertical half-thickness at the core
+const RIM_THICKNESS   = 0.018;  // vertical half-thickness at the rim
 const discParticles = Array.from({length: PARTICLE_COUNT}, () => {
   const u = Math.random();
   const rFrac = Math.pow(u, 1.9);          // bias toward centre
   const theta = Math.random()*Math.PI*2;
   const r = rFrac * GAL_R_CONST;
+  // thickness tapers from bulge (core) to rim (edge)
+  const thickness = BULGE_THICKNESS*Math.pow(1-rFrac, 2.2) + RIM_THICKNESS;
+  // sum of 3 uniforms approximates a soft gaussian-ish falloff, so the
+  // midplane stays densest rather than a hard-edged slab
+  const yUnit = ((Math.random()+Math.random()+Math.random())/3 - 0.5) * 2;
+  const y = yUnit * thickness;
   return {
-    pos: [r*Math.cos(theta), 0, r*Math.sin(theta)],
+    pos: [r*Math.cos(theta), y, r*Math.sin(theta)],
     rFrac,
     size: Math.random()*0.9 + 0.25,
     twinkle: Math.random()*0.6 + 0.4,
@@ -182,22 +192,31 @@ function label(p3, text, color, offx, offy, align, size) {
   ctx.fillStyle = color||'#fff'; ctx.fillText(text, p[0]+(offx||0), p[1]+(offy||0));
   ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.textBaseline = 'alphabetic';
 }
-function drawShadedSphere(cx, cy, r, L, baseColor) {
+function drawShadedSphere(cx, cy, r, L, baseColor, fogAmount) {
   const lx = L[0], ly = -L[1], lz = L[2];
   const lightAngle = Math.atan2(ly, lx); const absLz = Math.abs(lz);
+  let fillColor = baseColor;
+  if (fogAmount) {
+    const hex = baseColor.replace('#','');
+    const br = parseInt(hex.substring(0,2),16), bg = parseInt(hex.substring(2,4),16), bb = parseInt(hex.substring(4,6),16);
+    const fr = 150, fg = 175, fb = 220; // haze tint
+    const t = Math.min(1, Math.max(0, fogAmount));
+    fillColor = `rgb(${Math.round(br*(1-t)+fr*t)},${Math.round(bg*(1-t)+fg*t)},${Math.round(bb*(1-t)+fb*t)})`;
+  }
   ctx.save();
   ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
-  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fillStyle = baseColor; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fillStyle = fillColor; ctx.fill();
   ctx.translate(cx,cy); ctx.rotate(lightAngle);
   ctx.beginPath(); ctx.moveTo(0,-r);
   ctx.arc(0,0,r,-Math.PI/2,Math.PI/2,true);
   if (absLz < 0.01) { ctx.lineTo(0,-r); }
   else { ctx.ellipse(0,0,absLz*r,r,0,Math.PI/2,-Math.PI/2, lz>=0); }
-  ctx.closePath(); ctx.fillStyle = 'rgba(4,8,28,0.78)'; ctx.fill();
+  ctx.closePath(); ctx.fillStyle = 'rgba(4,8,28,1)'; ctx.fill();
   ctx.restore();
-  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.strokeStyle='rgba(255,255,255,0.35)'; ctx.lineWidth=1; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.strokeStyle=`rgba(255,255,255,${0.35*(1-(fogAmount||0)*0.6)})`; ctx.lineWidth=1; ctx.stroke();
 }
-function polyDepth(pts3) { const rot = pts3.map(p => applyRot(p, rotX, rotY)); return rot.reduce((s,p)=>s+p[2],0)/rot.length; }
+function polyDepth(pts3) { const rot = pts3.map(p => applyRot(p, rotX, rotY)); return -(rot.reduce((s,p)=>s+p[2],0)/rot.length); }
+function depthKey(rotatedZ) { return -rotatedZ; }
 
 function render() {
   const rect = canvas.getBoundingClientRect();
@@ -217,21 +236,19 @@ function render() {
   const drawList = [];
   function push(depth, fn) { drawList.push({depth, fn}); }
 
-  // ── Galactic plane: cloudy disc (replaces flat ellipse outline) ──
-  // Drawn unconditionally FIRST, outside the depth sort, so it always sits
-  // as a background layer — the Earth/Sun/core objects are drawn afterward
-  // and stay fully opaque on top, regardless of viewing angle.
   const galPts = makeDisc(0,0,0, GAL_R, GAL_R, 72).map(p=>sv(p));
-  (() => {
-    // soft glow fill, clipped to the true projected disc silhouette
-    const galScreen = galPts.map(p => proj(p));
-    ctx.save();
+  const galScreen = galPts.map(p => proj(p));
+  function clipToDisc() {
     ctx.beginPath();
     ctx.moveTo(galScreen[0][0], galScreen[0][1]);
     for (let i=1;i<galScreen.length;i++) ctx.lineTo(galScreen[i][0], galScreen[i][1]);
-    ctx.closePath();
-    ctx.clip();
+    ctx.closePath(); ctx.clip();
+  }
 
+  // ambient glow fill — pure soft light, not a solid surface, so it's
+  // fine as an unconditional background regardless of viewing angle
+  (() => {
+    ctx.save(); clipToDisc();
     const coreScreen = proj(sv(CORE_POS));
     let maxDist = 0;
     galScreen.forEach(p => { const d = Math.hypot(p[0]-coreScreen[0], p[1]-coreScreen[1]); if (d>maxDist) maxDist = d; });
@@ -242,67 +259,65 @@ function render() {
     ctx.fillStyle = glow;
     ctx.fillRect(0,0,W(),H());
     ctx.restore();
-
-    // particle scatter — depth-aware: particles nearer the camera are
-    // rendered larger and crisp (individual grain visible), particles on
-    // the far side / sides are smaller, fainter, and progressively more
-    // blurred, so the disc reads with real perspective falloff rather
-    // than uniform texture all the way around
-    const fov = 900;
-    const nearCanvas = document.createElement('canvas'); nearCanvas.width = W(); nearCanvas.height = H();
-    const midCanvas  = document.createElement('canvas'); midCanvas.width  = W(); midCanvas.height  = H();
-    const farCanvas  = document.createElement('canvas'); farCanvas.width  = W(); farCanvas.height  = H();
-    const nctx = nearCanvas.getContext('2d'), mctx = midCanvas.getContext('2d'), fctx = farCanvas.getContext('2d');
-
-    let dMin = Infinity, dMax = -Infinity;
-    const withDepth = discParticles.map(pt => {
-      const scaled = sv(pt.pos);
-      const rotated = applyRot(scaled, rotX, rotY);
-      const depthFactor = fov / (rotated[2] + fov);
-      if (depthFactor < dMin) dMin = depthFactor;
-      if (depthFactor > dMax) dMax = depthFactor;
-      return { pt, rotated, depthFactor };
-    });
-    const dRange = Math.max(0.0001, dMax - dMin);
-
-    withDepth.forEach(({pt, rotated, depthFactor}) => {
-      const p2 = project(rotated, 1, ox(), oy());
-      const dNorm = (depthFactor - dMin) / dRange; // 0 = farthest, 1 = nearest
-
-      const coreColor = [255,244,214], edgeColor = [180,200,255];
-      const mix = pt.rFrac;
-      const r = coreColor[0]*(1-mix)+edgeColor[0]*mix;
-      const g = coreColor[1]*(1-mix)+edgeColor[1]*mix;
-      const b = coreColor[2]*(1-mix)+edgeColor[2]*mix;
-
-      const sizeMul = 0.55 + dNorm*1.35;      // near particles noticeably bigger
-      const alphaBase = (1 - pt.rFrac*0.7) * pt.twinkle;
-
-      let targetCtx, alphaMul, size;
-      if (dNorm > 0.62) {           // near side — crisp, well-defined
-        targetCtx = nctx; alphaMul = 1.0; size = pt.size * sizeMul * 1.15;
-      } else if (dNorm > 0.30) {    // mid distance — light blur
-        targetCtx = mctx; alphaMul = 0.85; size = pt.size * sizeMul;
-      } else {                      // far side / edges — hazy
-        targetCtx = fctx; alphaMul = 0.55; size = pt.size * sizeMul * 0.85 + 0.4;
-      }
-
-      targetCtx.fillStyle = `rgba(${r|0},${g|0},${b|0},${(alphaBase*alphaMul).toFixed(3)})`;
-      targetCtx.beginPath(); targetCtx.arc(p2[0], p2[1], size, 0, Math.PI*2); targetCtx.fill();
-    });
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(galScreen[0][0], galScreen[0][1]);
-    for (let i=1;i<galScreen.length;i++) ctx.lineTo(galScreen[i][0], galScreen[i][1]);
-    ctx.closePath(); ctx.clip();
-
-    ctx.filter = 'blur(3.2px)'; ctx.drawImage(farCanvas, 0, 0);
-    ctx.filter = 'blur(1.4px)'; ctx.drawImage(midCanvas, 0, 0);
-    ctx.filter = 'blur(0.4px)'; ctx.drawImage(nearCanvas, 0, 0);
-    ctx.filter = 'none';
-    ctx.restore();
   })();
+
+  // particle scatter — split into near/mid/far depth bands. Each band is
+  // pushed into the SAME depth-sorted draw list as the Earth/Sun/core
+  // objects (using each particle's real rotated depth), so a season Earth
+  // on the far side of the disc correctly draws behind the near-side
+  // particle haze instead of always floating on top of it.
+  const fov = 900;
+  const bands = {
+    near: { canvas: document.createElement('canvas'), blur: 0.4, depthSum: 0, n: 0 },
+    mid:  { canvas: document.createElement('canvas'), blur: 1.4, depthSum: 0, n: 0 },
+    far:  { canvas: document.createElement('canvas'), blur: 3.2, depthSum: 0, n: 0 },
+  };
+  Object.values(bands).forEach(b => { b.canvas.width = W(); b.canvas.height = H(); b.ctx = b.canvas.getContext('2d'); });
+
+  let dMin = Infinity, dMax = -Infinity;
+  const withDepth = discParticles.map(pt => {
+    const scaled = sv(pt.pos);
+    const rotated = applyRot(scaled, rotX, rotY);
+    const depthFactor = fov / (rotated[2] + fov);
+    if (depthFactor < dMin) dMin = depthFactor;
+    if (depthFactor > dMax) dMax = depthFactor;
+    return { pt, rotated, depthFactor };
+  });
+  const dRange = Math.max(0.0001, dMax - dMin);
+
+  withDepth.forEach(({pt, rotated, depthFactor}) => {
+    const p2 = project(rotated, 1, ox(), oy());
+    const dNorm = (depthFactor - dMin) / dRange; // 0 = farthest, 1 = nearest
+
+    const coreColor = [255,244,214], edgeColor = [180,200,255];
+    const mix = pt.rFrac;
+    const r = coreColor[0]*(1-mix)+edgeColor[0]*mix;
+    const g = coreColor[1]*(1-mix)+edgeColor[1]*mix;
+    const b = coreColor[2]*(1-mix)+edgeColor[2]*mix;
+
+    const sizeMul = 0.55 + dNorm*1.35;
+    const alphaBase = (1 - pt.rFrac*0.7) * pt.twinkle;
+
+    let band, alphaMul, size;
+    if (dNorm > 0.62)      { band = bands.near; alphaMul = 1.0;  size = pt.size * sizeMul * 1.15; }
+    else if (dNorm > 0.30) { band = bands.mid;  alphaMul = 0.85; size = pt.size * sizeMul; }
+    else                   { band = bands.far;  alphaMul = 0.55; size = pt.size * sizeMul * 0.85 + 0.4; }
+
+    band.ctx.fillStyle = `rgba(${r|0},${g|0},${b|0},${(alphaBase*alphaMul).toFixed(3)})`;
+    band.ctx.beginPath(); band.ctx.arc(p2[0], p2[1], size, 0, Math.PI*2); band.ctx.fill();
+    band.depthSum += rotated[2]; band.n += 1;
+  });
+
+  Object.values(bands).forEach(b => {
+    const avgDepth = b.n ? depthKey(b.depthSum / b.n) : 0;
+    push(avgDepth, () => {
+      ctx.save(); clipToDisc();
+      ctx.filter = `blur(${b.blur}px)`;
+      ctx.drawImage(b.canvas, 0, 0);
+      ctx.filter = 'none';
+      ctx.restore();
+    });
+  });
 
   push(0, () => { drawLine(sv([0,0,-GAL_R]), sv([0,0,GAL_R]), 'rgba(200,215,255,0.10)', 1, [6,6]); });
 
@@ -337,7 +352,7 @@ function render() {
   });
 
   const eu = EARTH_POS;
-  push(1, () => {
+  push(depthKey(applyRot(sv(SUN_POS), rotX, rotY)[2]), () => {
     const sp2 = proj(sv(SUN_POS));
     const sg = ctx.createRadialGradient(sp2[0],sp2[1],0,sp2[0],sp2[1],s*0.055);
     sg.addColorStop(0,'rgba(255,224,60,1)'); sg.addColorStop(0.45,'rgba(255,160,0,0.65)'); sg.addColorStop(1,'rgba(255,100,0,0)');
@@ -345,8 +360,7 @@ function render() {
     ctx.beginPath(); ctx.arc(sp2[0],sp2[1],7,0,Math.PI*2); ctx.fillStyle='#ffe066'; ctx.fill();
   });
 
-  push(0, () => {
-    const ep = proj(sv(eu));
+  push(depthKey(applyRot(sv(eu), rotX, rotY)[2]), () => {
     const eg = ctx.createRadialGradient(ep[0],ep[1],0,ep[0],ep[1],s*0.055);
     eg.addColorStop(0,'rgba(168,216,234,0.85)'); eg.addColorStop(1,'rgba(168,216,234,0)');
     ctx.beginPath(); ctx.arc(ep[0],ep[1],s*0.055,0,Math.PI*2); ctx.fillStyle=eg; ctx.fill();
@@ -362,11 +376,16 @@ function render() {
     const arrowTip = nightViewArrow(ePos, scale3(s2.galBias, 0.5), ARROW_L);
     const arrowTipS = sv(arrowTip);
     const capturedEPos = ePos;
-    push(0, () => {
+    const earthRotZ = applyRot(ePosS, rotX, rotY)[2];
+    const perspR = 15 * (900 / (earthRotZ + 900));
+    const earthDepthFactor = 900 / (earthRotZ + 900);
+    const earthDNorm = Math.min(1, Math.max(0, (earthDepthFactor - dMin) / dRange));
+    const fogAmount = (1 - earthDNorm) * 0.55;
+    push(depthKey(earthRotZ), () => {
       const toSun = normalize([SUN_POS[0]-capturedEPos[0], SUN_POS[1]-capturedEPos[1], SUN_POS[2]-capturedEPos[2]]);
       const L = applyRot(toSun, rotX, rotY);
       const ep_s = proj(ePosS);
-      drawShadedSphere(ep_s[0], ep_s[1], 15, L, s2.color);
+      drawShadedSphere(ep_s[0], ep_s[1], perspR, L, s2.color, fogAmount);
       drawArrow(ePosS, arrowTipS, s2.color, 2, 10);
       label(arrowTipS, s2.name, s2.color, 0, s*(s2.labelOffY ?? -0.08), 'center', 16);
       label(arrowTipS, s2.quadrant, 'rgba(255,255,255,0.75)', 0, s*(s2.quadrantOffY ?? 0.10), 'center', 13);
