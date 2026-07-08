@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galactic Geometry — Cloudy Disc Mockup</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Space+Mono:wght@400;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --void: #03040c; --panel: rgba(5, 8, 18, 0.92); --border: rgba(255,255,255,0.08);
+    --label: #8a9ab8; --bright: #e8eef8;
+  }
+  body {
+    background: var(--void); color: var(--bright); font-family: 'Space Mono', monospace;
+    height: 100vh; display: flex; flex-direction: column; overflow: hidden; user-select: none;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px 12px; border-bottom: 1px solid var(--border);
+    background: var(--panel); flex-shrink: 0;
+  }
+  .header-info {
+    font-family: 'Cormorant Garamond', serif; font-size: 1.1rem; line-height: 1.5;
+    color: var(--label); text-align: center; width: 34em;
+  }
+  .header-planes { display: flex; flex-direction: column; gap: 6px; }
+  header h1 { font-family: 'Cormorant Garamond', serif; font-weight: 300; font-size: 1.35rem; letter-spacing: 0.04em; color: #fff; }
+  header h1 em { font-style: italic; color: #e8c87a; }
+  header p { font-size: 0.6rem; letter-spacing: 0.14em; color: var(--label); text-transform: uppercase; }
+  .leg-item { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; font-size: 0.80rem; color: var(--label); line-height: 1.4; }
+  .leg-swatch { width: 22px; height: 3px; flex-shrink: 0; border-radius: 2px; }
+  .leg-swatch.dashed { background: repeating-linear-gradient(90deg, currentColor 0px, currentColor 4px, transparent 4px, transparent 8px); height: 2px; }
+  .main { flex: 1; display: flex; position: relative; overflow: hidden; }
+  #canvas { flex: 1; min-width: 0; display: block; cursor: grab; }
+  #canvas:active { cursor: grabbing; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Galactic Geometry — <em>Cloudy Disc Mockup</em></h1>
+    <p>Observer at 42°N · Drag to rotate · Scroll to zoom</p>
+  </div>
+  <div class="header-info">
+    Same geometry as v1.6.0 — galactic plane re-rendered as a gradient + particle "cloudy disc" instead of a flat outline.
+  </div>
+  <div class="header-planes">
+    <div class="leg-item"><div class="leg-swatch" style="background: rgba(200,215,255,0.9);"></div>Galactic plane (cloudy disc)</div>
+    <div class="leg-item"><div class="leg-swatch dashed" style="color: rgba(165,214,167,0.8);"></div>Ecliptic plane (Earth's orbit)</div>
+  </div>
+</header>
+<div class="main"><canvas id="canvas"></canvas></div>
+
+<script>
+// ── 3D MATH (unchanged from app) ─────────────────────────────
+function rotateY(v, a) { return [ v[0]*Math.cos(a)+v[2]*Math.sin(a), v[1], -v[0]*Math.sin(a)+v[2]*Math.cos(a) ]; }
+function rotateX(v, a) { return [ v[0], v[1]*Math.cos(a)-v[2]*Math.sin(a), v[1]*Math.sin(a)+v[2]*Math.cos(a) ]; }
+function project(v, scale, ox, oy) {
+  const fov = 900; const z = v[2] + fov; const s = fov / z * scale;
+  return [ ox + v[0]*s, oy - v[1]*s, v[2] ];
+}
+function normalize(v) { const l = Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]); return l ? [v[0]/l, v[1]/l, v[2]/l] : v; }
+function scale3(v, s) { return [v[0]*s, v[1]*s, v[2]*s]; }
+function add3(a, b) { return [a[0]+b[0], a[1]+b[1], a[2]+b[2]]; }
+function dot3(a, b) { return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
+function cross3(a, b) { return [ a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0] ]; }
+function applyRot(v, rx, ry) { return rotateX(rotateY(v, ry), rx); }
+
+const DEG = Math.PI/180;
+const ECL_TILT = 60*DEG;
+const AXIS_TILT = 23.5*DEG;
+const EARTH_POS = [0.58, 0, 0];
+const SUN_POS   = [0.58, 0, 0];
+const CORE_POS  = [0,    0, 0];
+
+function makeDisc(cx, cy, cz, rx, rz, n) {
+  const pts = [];
+  for (let i = 0; i <= n; i++) { const a = (i/n)*Math.PI*2; pts.push([cx+rx*Math.cos(a), cy, cz+rz*Math.sin(a)]); }
+  return pts;
+}
+function makeEclipticDisc(centre, r, n) {
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const a = (i/n)*Math.PI*2; const x = r*Math.cos(a); const z = r*Math.sin(a);
+    const y2 = -z*Math.sin(ECL_TILT); const z2 = z*Math.cos(ECL_TILT);
+    pts.push([centre[0]+x, centre[1]+y2, centre[2]+z2]);
+  }
+  return pts;
+}
+function makeOrbit(r, n) { return makeEclipticDisc(SUN_POS, r, n); }
+
+const SEASONS = [
+  { name: 'Summer - S', color: '#f5a623', orbitAngle: Math.PI, galBias: [0,-1.2,0], quadrant: 'Down / In' },
+  { name: 'Autumn - SW', color: '#bf5230', orbitAngle: Math.PI*0.5, galBias: [0,-1.5,0], quadrant: 'Down / In', labelOffY: 0.14, quadrantOffY: 0.07 },
+  { name: 'Winter - S/↑', color: '#64b5f6', orbitAngle: 0, galBias: [0,1.2,0], quadrant: 'Up / Out', quadrantOffY: -0.14 },
+  { name: 'Spring - ↑/S', color: '#a5d6a7', orbitAngle: Math.PI*1.5, galBias: [0,1.8,0], quadrant: 'Up / Out (polar)', quadrantOffY: -0.14 },
+];
+
+function earthOnOrbit(angle, orbitR) {
+  const x = orbitR*Math.cos(angle); const z_ecl = orbitR*Math.sin(angle);
+  const y = -z_ecl*Math.sin(ECL_TILT); const z = z_ecl*Math.cos(ECL_TILT);
+  return [SUN_POS[0]+x, SUN_POS[1]+y, SUN_POS[2]+z];
+}
+function nightViewArrow(earthPos, galBias, arrowLen) {
+  const raw = normalize([earthPos[0]-SUN_POS[0], earthPos[1]-SUN_POS[1], earthPos[2]-SUN_POS[2]]);
+  const blended = normalize(add3(raw, galBias));
+  return add3(earthPos, scale3(blended, arrowLen));
+}
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const STAR_COUNT = 350;
+const stars = Array.from({length: STAR_COUNT}, () => ({ x: Math.random(), y: Math.random(), r: 0.5+Math.random(), a: 0.15+Math.random()*0.60 }));
+
+let rotX = 0.32, rotY = -0.50;
+let zoom = 1.0;
+let dragging = false, lastX = 0, lastY = 0;
+const DEFAULT_RX = 0.32, DEFAULT_RY = -0.50;
+
+// pre-generate cloudy-disc particles once, in normalized galactic-plane
+// coordinates (same XZ plane / y=0 as the galactic disc ellipse), so they
+// scale and rotate identically to the rest of the scene every frame.
+const GAL_R_CONST = 1.15;
+const PARTICLE_COUNT = 9000;
+const discParticles = Array.from({length: PARTICLE_COUNT}, () => {
+  const u = Math.random();
+  const rFrac = Math.pow(u, 1.9);          // bias toward centre
+  const theta = Math.random()*Math.PI*2;
+  const r = rFrac * GAL_R_CONST;
+  return {
+    pos: [r*Math.cos(theta), 0, r*Math.sin(theta)],
+    rFrac,
+    size: Math.random()*0.9 + 0.25,
+    twinkle: Math.random()*0.6 + 0.4,
+  };
+});
+
+function W() { return canvas.width; }
+function H() { return canvas.height; }
+function ox() { return W()*0.5; }
+function oy() { return H()*0.5; }
+function proj(pt) { const r = applyRot(pt, rotX, rotY); return project(r, zoom, ox(), oy()); }
+
+function drawArrow(p3from, p3to, color, lineW, headSize) {
+  const a = proj(p3from), b = proj(p3to);
+  ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]);
+  ctx.strokeStyle = color; ctx.lineWidth = lineW||2; ctx.setLineDash([]); ctx.stroke();
+  const angle = Math.atan2(b[1]-a[1], b[0]-a[0]); const s = headSize||10;
+  ctx.beginPath(); ctx.moveTo(b[0],b[1]);
+  ctx.lineTo(b[0]-s*Math.cos(angle-0.38), b[1]-s*Math.sin(angle-0.38));
+  ctx.moveTo(b[0],b[1]);
+  ctx.lineTo(b[0]-s*Math.cos(angle+0.38), b[1]-s*Math.sin(angle+0.38));
+  ctx.strokeStyle = color; ctx.lineWidth = lineW||2; ctx.stroke();
+}
+function drawLine(p3a, p3b, color, lw, dash) {
+  const a = proj(p3a), b = proj(p3b);
+  ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]);
+  ctx.strokeStyle = color; ctx.lineWidth = lw||1.5;
+  if (dash) ctx.setLineDash(dash); else ctx.setLineDash([]);
+  ctx.stroke(); ctx.setLineDash([]);
+}
+function drawPoly(pts3, strokeColor, fillColor, lw, dash) {
+  if (pts3.length < 2) return;
+  const proj2 = pts3.map(p => proj(p));
+  ctx.beginPath(); ctx.moveTo(proj2[0][0], proj2[0][1]);
+  for (let i=1;i<proj2.length;i++) ctx.lineTo(proj2[i][0], proj2[i][1]);
+  ctx.closePath();
+  if (fillColor) { ctx.fillStyle = fillColor; ctx.fill(); }
+  if (strokeColor) { ctx.strokeStyle = strokeColor; ctx.lineWidth = lw||1.5; if (dash) ctx.setLineDash(dash); else ctx.setLineDash([]); ctx.stroke(); ctx.setLineDash([]); }
+}
+function dot(p3, color, r) {
+  const p = proj(p3);
+  ctx.beginPath(); ctx.arc(p[0],p[1],r||4,0,Math.PI*2); ctx.fillStyle = color; ctx.fill();
+  return p;
+}
+function label(p3, text, color, offx, offy, align, size) {
+  const p = proj(p3);
+  ctx.font = (size||11)+'px Space Mono'; ctx.textAlign = align||'center'; ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,8,0.95)'; ctx.shadowBlur = 5;
+  ctx.fillStyle = color||'#fff'; ctx.fillText(text, p[0]+(offx||0), p[1]+(offy||0));
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.textBaseline = 'alphabetic';
+}
+function drawShadedSphere(cx, cy, r, L, baseColor) {
+  const lx = L[0], ly = -L[1], lz = L[2];
+  const lightAngle = Math.atan2(ly, lx); const absLz = Math.abs(lz);
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fillStyle = baseColor; ctx.fill();
+  ctx.translate(cx,cy); ctx.rotate(lightAngle);
+  ctx.beginPath(); ctx.moveTo(0,-r);
+  ctx.arc(0,0,r,-Math.PI/2,Math.PI/2,true);
+  if (absLz < 0.01) { ctx.lineTo(0,-r); }
+  else { ctx.ellipse(0,0,absLz*r,r,0,Math.PI/2,-Math.PI/2, lz>=0); }
+  ctx.closePath(); ctx.fillStyle = 'rgba(4,8,28,0.78)'; ctx.fill();
+  ctx.restore();
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.strokeStyle='rgba(255,255,255,0.35)'; ctx.lineWidth=1; ctx.stroke();
+}
+function polyDepth(pts3) { const rot = pts3.map(p => applyRot(p, rotX, rotY)); return rot.reduce((s,p)=>s+p[2],0)/rot.length; }
+
+function render() {
+  const rect = canvas.getBoundingClientRect();
+  const cw = Math.round(rect.width), ch = Math.round(rect.height);
+  if (!cw || !ch) return;
+  canvas.width = cw; canvas.height = ch;
+  ctx.clearRect(0,0,W(),H());
+  ctx.fillStyle = '#03040c'; ctx.fillRect(0,0,W(),H());
+
+  stars.forEach(st => { ctx.beginPath(); ctx.arc(st.x*W(), st.y*H(), st.r, 0, Math.PI*2); ctx.fillStyle = `rgba(255,255,255,${st.a})`; ctx.fill(); });
+
+  const SCALE = Math.min(W()*0.40, H()*0.44) * zoom;
+  const GAL_R = GAL_R_CONST, ORBIT_R = 0.15, AXIS_L = 0.62, ARROW_L = 0.52;
+  const s = SCALE;
+  function sv(v) { return scale3(v, s); }
+
+  const drawList = [];
+  function push(depth, fn) { drawList.push({depth, fn}); }
+
+  // ── Galactic plane: cloudy disc (replaces flat ellipse outline) ──
+  const galPts = makeDisc(0,0,0, GAL_R, GAL_R, 72).map(p=>sv(p));
+  push(polyDepth(galPts.slice(0,4)), () => {
+    // soft glow fill, clipped to the true projected disc silhouette
+    const galScreen = galPts.map(p => proj(p));
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(galScreen[0][0], galScreen[0][1]);
+    for (let i=1;i<galScreen.length;i++) ctx.lineTo(galScreen[i][0], galScreen[i][1]);
+    ctx.closePath();
+    ctx.clip();
+
+    const coreScreen = proj(sv(CORE_POS));
+    let maxDist = 0;
+    galScreen.forEach(p => { const d = Math.hypot(p[0]-coreScreen[0], p[1]-coreScreen[1]); if (d>maxDist) maxDist = d; });
+    const glow = ctx.createRadialGradient(coreScreen[0],coreScreen[1],0, coreScreen[0],coreScreen[1], maxDist);
+    glow.addColorStop(0,   'rgba(225,235,255,0.30)');
+    glow.addColorStop(0.35,'rgba(180,200,255,0.14)');
+    glow.addColorStop(1,   'rgba(140,160,255,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0,0,W(),H());
+    ctx.restore();
+
+    // particle scatter — depth-aware: particles nearer the camera are
+    // rendered larger and crisp (individual grain visible), particles on
+    // the far side / sides are smaller, fainter, and progressively more
+    // blurred, so the disc reads with real perspective falloff rather
+    // than uniform texture all the way around
+    const fov = 900;
+    const nearCanvas = document.createElement('canvas'); nearCanvas.width = W(); nearCanvas.height = H();
+    const midCanvas  = document.createElement('canvas'); midCanvas.width  = W(); midCanvas.height  = H();
+    const farCanvas  = document.createElement('canvas'); farCanvas.width  = W(); farCanvas.height  = H();
+    const nctx = nearCanvas.getContext('2d'), mctx = midCanvas.getContext('2d'), fctx = farCanvas.getContext('2d');
+
+    let dMin = Infinity, dMax = -Infinity;
+    const withDepth = discParticles.map(pt => {
+      const scaled = sv(pt.pos);
+      const rotated = applyRot(scaled, rotX, rotY);
+      const depthFactor = fov / (rotated[2] + fov);
+      if (depthFactor < dMin) dMin = depthFactor;
+      if (depthFactor > dMax) dMax = depthFactor;
+      return { pt, rotated, depthFactor };
+    });
+    const dRange = Math.max(0.0001, dMax - dMin);
+
+    withDepth.forEach(({pt, rotated, depthFactor}) => {
+      const p2 = project(rotated, 1, ox(), oy());
+      const dNorm = (depthFactor - dMin) / dRange; // 0 = farthest, 1 = nearest
+
+      const coreColor = [255,244,214], edgeColor = [180,200,255];
+      const mix = pt.rFrac;
+      const r = coreColor[0]*(1-mix)+edgeColor[0]*mix;
+      const g = coreColor[1]*(1-mix)+edgeColor[1]*mix;
+      const b = coreColor[2]*(1-mix)+edgeColor[2]*mix;
+
+      const sizeMul = 0.55 + dNorm*1.35;      // near particles noticeably bigger
+      const alphaBase = (1 - pt.rFrac*0.7) * pt.twinkle;
+
+      let targetCtx, alphaMul, size;
+      if (dNorm > 0.62) {           // near side — crisp, well-defined
+        targetCtx = nctx; alphaMul = 1.0; size = pt.size * sizeMul * 1.15;
+      } else if (dNorm > 0.30) {    // mid distance — light blur
+        targetCtx = mctx; alphaMul = 0.85; size = pt.size * sizeMul;
+      } else {                      // far side / edges — hazy
+        targetCtx = fctx; alphaMul = 0.55; size = pt.size * sizeMul * 0.85 + 0.4;
+      }
+
+      targetCtx.fillStyle = `rgba(${r|0},${g|0},${b|0},${(alphaBase*alphaMul).toFixed(3)})`;
+      targetCtx.beginPath(); targetCtx.arc(p2[0], p2[1], size, 0, Math.PI*2); targetCtx.fill();
+    });
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(galScreen[0][0], galScreen[0][1]);
+    for (let i=1;i<galScreen.length;i++) ctx.lineTo(galScreen[i][0], galScreen[i][1]);
+    ctx.closePath(); ctx.clip();
+
+    ctx.filter = 'blur(3.2px)'; ctx.drawImage(farCanvas, 0, 0);
+    ctx.filter = 'blur(1.4px)'; ctx.drawImage(midCanvas, 0, 0);
+    ctx.filter = 'blur(0.4px)'; ctx.drawImage(nearCanvas, 0, 0);
+    ctx.filter = 'none';
+    ctx.restore();
+  });
+
+  push(0, () => { drawLine(sv([0,0,-GAL_R]), sv([0,0,GAL_R]), 'rgba(200,215,255,0.10)', 1, [6,6]); });
+
+  push(0, () => {
+    const cp = proj(sv(CORE_POS));
+    const gr = ctx.createRadialGradient(cp[0],cp[1],0,cp[0],cp[1],s*0.14);
+    gr.addColorStop(0,'rgba(90,180,255,1)'); gr.addColorStop(0.25,'rgba(60,140,255,0.8)');
+    gr.addColorStop(0.6,'rgba(30,80,200,0.3)'); gr.addColorStop(1,'rgba(30,80,200,0)');
+    ctx.beginPath(); ctx.arc(cp[0],cp[1],s*0.14,0,Math.PI*2); ctx.fillStyle=gr; ctx.fill();
+    ctx.beginPath(); ctx.arc(cp[0],cp[1],5,0,Math.PI*2); ctx.fillStyle='#5ab4ff'; ctx.fill();
+    label(sv(CORE_POS), 'GALACTIC CORE', 'rgba(90,180,255,0.95)', 0, s*-0.24, 'center', 12);
+    label(sv(CORE_POS), '(Sagittarius)', 'rgba(130,190,255,0.6)', 0, s*-0.18, 'center', 10);
+  });
+
+  push(0, () => {
+    drawLine(sv(CORE_POS), sv([0,AXIS_L,0]), 'rgba(100,181,246,0.6)', 1.5, [5,5]);
+    drawLine(sv(CORE_POS), sv([0,-AXIS_L,0]),'rgba(239,154,154,0.6)', 1.5, [5,5]);
+    dot(sv([0,AXIS_L,0]), '#64b5f6', 4); dot(sv([0,-AXIS_L,0]), '#ef9a9a', 4);
+    label(sv([0,AXIS_L*1.08,0]), 'GAL. NORTH', '#64b5f6', 0, -s*0.04, 'center', 11);
+    label(sv([0,-AXIS_L*1.08,0]), 'GAL. SOUTH', '#ef9a9a', 0, s*0.04, 'center', 11);
+  });
+
+  const orbitPts = makeOrbit(ORBIT_R, 64).map(p=>sv(p));
+  const _sunScrn = proj(sv(SUN_POS));
+  const _projOrbit = orbitPts.map(p => proj(p));
+  let _orbTopY = Infinity;
+  _projOrbit.forEach(p => { if (p[1] < _orbTopY) _orbTopY = p[1]; });
+  const RING_PAD = 16;
+
+  push(polyDepth(orbitPts.slice(0,4)), () => {
+    drawPoly(orbitPts, 'rgba(165,214,167,0.7)', 'rgba(165,214,167,0.04)', 1.4, [3,4]);
+  });
+
+  const eu = EARTH_POS;
+  push(1, () => {
+    const sp2 = proj(sv(SUN_POS));
+    const sg = ctx.createRadialGradient(sp2[0],sp2[1],0,sp2[0],sp2[1],s*0.055);
+    sg.addColorStop(0,'rgba(255,224,60,1)'); sg.addColorStop(0.45,'rgba(255,160,0,0.65)'); sg.addColorStop(1,'rgba(255,100,0,0)');
+    ctx.beginPath(); ctx.arc(sp2[0],sp2[1],s*0.055,0,Math.PI*2); ctx.fillStyle=sg; ctx.fill();
+    ctx.beginPath(); ctx.arc(sp2[0],sp2[1],7,0,Math.PI*2); ctx.fillStyle='#ffe066'; ctx.fill();
+  });
+
+  push(0, () => {
+    const ep = proj(sv(eu));
+    const eg = ctx.createRadialGradient(ep[0],ep[1],0,ep[0],ep[1],s*0.055);
+    eg.addColorStop(0,'rgba(168,216,234,0.85)'); eg.addColorStop(1,'rgba(168,216,234,0)');
+    ctx.beginPath(); ctx.arc(ep[0],ep[1],s*0.055,0,Math.PI*2); ctx.fillStyle=eg; ctx.fill();
+    ctx.beginPath(); ctx.arc(ep[0],ep[1],6,0,Math.PI*2); ctx.fillStyle='#a8d8ea'; ctx.fill();
+    ctx.beginPath(); ctx.arc(ep[0],ep[1],6,0,Math.PI*2); ctx.strokeStyle='rgba(255,255,255,0.8)'; ctx.lineWidth=1.5; ctx.stroke();
+    const _earthLabelOffy = _orbTopY - RING_PAD - 6 - ep[1];
+    label(sv(eu), 'EARTH', 'rgba(255,255,255,0.75)', -20, _earthLabelOffy, 'center', 12);
+  });
+
+  SEASONS.forEach((s2, i) => {
+    const ePos = earthOnOrbit(s2.orbitAngle, ORBIT_R);
+    const ePosS = sv(ePos);
+    const arrowTip = nightViewArrow(ePos, scale3(s2.galBias, 0.5), ARROW_L);
+    const arrowTipS = sv(arrowTip);
+    const capturedEPos = ePos;
+    push(0, () => {
+      const toSun = normalize([SUN_POS[0]-capturedEPos[0], SUN_POS[1]-capturedEPos[1], SUN_POS[2]-capturedEPos[2]]);
+      const L = applyRot(toSun, rotX, rotY);
+      const ep_s = proj(ePosS);
+      drawShadedSphere(ep_s[0], ep_s[1], 15, L, s2.color);
+      drawArrow(ePosS, arrowTipS, s2.color, 2, 10);
+      label(arrowTipS, s2.name, s2.color, 0, s*(s2.labelOffY ?? -0.08), 'center', 16);
+      label(arrowTipS, s2.quadrant, 'rgba(255,255,255,0.75)', 0, s*(s2.quadrantOffY ?? 0.10), 'center', 13);
+      drawLine(sv(SUN_POS), ePosS, 'rgba(255,255,255,0.12)', 1, [2,4]);
+    });
+  });
+
+  drawList.sort((a,b) => a.depth - b.depth);
+  drawList.forEach(item => item.fn());
+}
+
+function onMouseDown(e) { dragging = true; lastX = e.clientX; lastY = e.clientY; }
+function onMouseMove(e) {
+  if (!dragging) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY;
+  rotY += dx*0.007; rotX += dy*0.007;
+  rotX = Math.max(-Math.PI*0.5, Math.min(Math.PI*0.5, rotX));
+  lastX = e.clientX; lastY = e.clientY; render();
+}
+function onMouseUp() { dragging = false; }
+function onWheel(e) { e.preventDefault(); zoom *= e.deltaY<0 ? 1.08 : 0.93; zoom = Math.max(0.3, Math.min(4, zoom)); render(); }
+canvas.addEventListener('mousedown', onMouseDown);
+window.addEventListener('mousemove', onMouseMove);
+window.addEventListener('mouseup', onMouseUp);
+canvas.addEventListener('wheel', onWheel, {passive:false});
+
+let lastTouchDist = null;
+function onTouchStart(e) {
+  if (e.touches.length===1) { dragging=true; lastX=e.touches[0].clientX; lastY=e.touches[0].clientY; }
+  if (e.touches.length===2) { lastTouchDist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); }
+}
+function onTouchMove(e) {
+  e.preventDefault();
+  if (e.touches.length===1 && dragging) {
+    const dx=e.touches[0].clientX-lastX, dy=e.touches[0].clientY-lastY;
+    rotY += dx*0.007; rotX += dy*0.007;
+    rotX = Math.max(-Math.PI*0.5, Math.min(Math.PI*0.5, rotX));
+    lastX=e.touches[0].clientX; lastY=e.touches[0].clientY; render();
+  }
+  if (e.touches.length===2 && lastTouchDist) {
+    const dist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+    zoom *= dist/lastTouchDist; zoom = Math.max(0.3, Math.min(4, zoom)); lastTouchDist = dist; render();
+  }
+}
+function onTouchEnd() { dragging = false; lastTouchDist = null; }
+canvas.addEventListener('touchstart', onTouchStart, {passive:false});
+canvas.addEventListener('touchmove', onTouchMove, {passive:false});
+canvas.addEventListener('touchend', onTouchEnd);
+
+let resizeTimer = null;
+function fullReset() { rotX = DEFAULT_RX; rotY = DEFAULT_RY; zoom = 1.0; render(); }
+function scheduleReset(delay) { if (resizeTimer) clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { resizeTimer=null; requestAnimationFrame(fullReset); }, delay); }
+window.addEventListener('resize', () => scheduleReset(150));
+window.addEventListener('orientationchange', () => scheduleReset(275));
+
+requestAnimationFrame(() => render());
+</script>
+</body>
+</html>
