@@ -218,8 +218,11 @@ function render() {
   function push(depth, fn) { drawList.push({depth, fn}); }
 
   // ── Galactic plane: cloudy disc (replaces flat ellipse outline) ──
+  // Drawn unconditionally FIRST, outside the depth sort, so it always sits
+  // as a background layer — the Earth/Sun/core objects are drawn afterward
+  // and stay fully opaque on top, regardless of viewing angle.
   const galPts = makeDisc(0,0,0, GAL_R, GAL_R, 72).map(p=>sv(p));
-  push(polyDepth(galPts.slice(0,4)), () => {
+  (() => {
     // soft glow fill, clipped to the true projected disc silhouette
     const galScreen = galPts.map(p => proj(p));
     ctx.save();
@@ -299,7 +302,7 @@ function render() {
     ctx.filter = 'blur(0.4px)'; ctx.drawImage(nearCanvas, 0, 0);
     ctx.filter = 'none';
     ctx.restore();
-  });
+  })();
 
   push(0, () => { drawLine(sv([0,0,-GAL_R]), sv([0,0,GAL_R]), 'rgba(200,215,255,0.10)', 1, [6,6]); });
 
